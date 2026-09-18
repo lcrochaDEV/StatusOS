@@ -2,6 +2,7 @@
 1. Colocar as % dentro do circuilo no dashbord.
 2. Por o total do hd a baixo da barra no canto diretiro.
 3. se após 5 minutos não hover nunum payload vai entrar uma porteção de tela.
+4. CORREÇÃO NO ACCESSPOIT
 
 
 ### CONFIGURAÇÕES DE TELA DO ARQUIVO User_Setup.h
@@ -112,6 +113,9 @@ sudo systemctl enable --now telemetry.service
 
 # Verifica o status e os logs de execução
 sudo systemctl status telemetry.service
+
+# Verificar log em tempo real
+
 ```
 #### telemetry.sh
 ```bash
@@ -523,6 +527,44 @@ Persona: DESENVOLVEDOR FULL STAKER EM SHELL/BASH
 
 CONTEXTO:
 remonte a ultima versão do arquivo shell para linux, com todas as variave, funções e comentários.
+
+AÇÃO:
+Realize uma análise técnica detalhada do código avaliando:
+
+- Legibilidade
+- Manutenibilidade
+- Performance
+- Possíveis bugs
+- Tratamento de exceções
+- Acoplamento e coesão
+- Princípios SOLID
+```
+
+
+Persona: DESENVOLVEDOR FULL STAKER EM C/C++
+
+CONTEXTO:
+Ajude na avaliação deste projeto, pois quero trocar todo o algoritimo, quero realizar a troca do anterio para esse postado.
+
+AÇÃO:
+Realize uma análise técnica detalhada do código avaliando:
+
+AÇÃO:
+Realize uma análise técnica detalhada do código avaliando:
+
+- Legibilidade
+- Manutenibilidade
+- Performance
+- Possíveis bugs
+- Tratamento de exceções
+- Acoplamento e coesão
+- Princípios SOLID
+
+
+Persona: DESENVOLVEDOR FULL STAKER EM HTML/CSS
+
+CONTEXTO:
+com os mesmo padrões que foi criado a pagina principal do porjeto de telemetria, ajuste a pagina de configurações que conterão estas tegs.
 
 AÇÃO:
 Realize uma análise técnica detalhada do código avaliando:

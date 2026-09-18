@@ -1,3 +1,7 @@
+// POR LUCAS ROCHA
+#include "Console.h"
+Console console = Console("Mochi> ");
+
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <lvgl.h>
@@ -32,13 +36,14 @@ IRAM_ATTR void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t 
 }
 
 void startWifi() {
-    wifiConnect.connections_Wifi();
+    wifiConnect.startAccessPoint();
 }
 
 void setup() {
     Serial.begin(115200);
+    Serial.println("Iniciando o sistema de telemetria...");
 
-    startWifi(); // 1. Conexão Wi-Fi
+    startWifi(); // Gerencia as conexões de rádio
 
     // 2. Inicialização do Hardware do Display TFT
     tft.init();
@@ -63,7 +68,8 @@ void setup() {
 
     // 5. Interface Gráfica e Servidor Web
     create_dashboard_ui();
-    setup_web_server();
+    setup_web_server();                                       // Inicializa o servidor HTTP assíncrono (método do servidorweb.h)
+    console.helloWord();                                      // CONSOLE
 }
 void loop() {
     static uint32_t last_tick = millis();
@@ -76,11 +82,10 @@ void loop() {
     // Executa as tarefas do LVGL
     lv_timer_handler();
 
-    // Executa a máquina de estados do Wi-Fi
-    wifiConnect.loop();
-
     // Processa o servidor web e WebSockets
     process_web_server_tasks();
 
     vTaskDelay(pdMS_TO_TICKS(5)); // Evita o uso excessivo de CPU
+
+    console.consoleView();
 }

@@ -8,6 +8,10 @@
 #include <vector>
 #include "ui_dashboard.h"
 #include "index_html.h"
+#include "config_html.h"
+
+#include "PhysicalAccessControl.h"
+PhysicalAccessControl physicalAccessControl; 
 
 struct TelemetryData {
     char id[64] = "N/A";
@@ -44,12 +48,38 @@ const uint32_t DISPLAY_ROTATION_INTERVAL_MS = 90000;
 inline AsyncWebServer server(80);
 inline AsyncWebSocket ws("/ws");
 
-// Auxiliar para localizar ou cadastrar host no vetor global por ID
+// Variáveis Globais de Estado do Servidor/Configurações
+inline bool g_webserver_state = true;
+inline String g_wake_up_time = "07:00";
+inline String g_sleep_time = "22:00";
+
+// Protótipos de Funções
+String processor(const String& var);
+
+// Processador de Placeholders do HTML
+String processor(const String& var) {
+    if(var == "SSID_VALUE") return (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "Desconectado";
+    if(var == "IP_VALUE")   return (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "0.0.0.0";
+    if(var == "MAC_VALUE")  return WiFi.macAddress();
+
+    if(var == "MODULE_VALUE")         return physicalAccessControl.modelBoardESP();
+    if(var == "TOTAL_RAM_VALUE")      return physicalAccessControl.total_ram();
+    if(var == "FLASH_SIZE_VALUE")     return physicalAccessControl.flash_size();
+    if(var == "MENOR_RAM_SIZE_VALUE") return physicalAccessControl.menor_ram_size();
+    if(var == "SKETCH_SIZE_VALUE")    return physicalAccessControl.sketch_Size();
+
+    // Placeholders do Form/Switch
+    if(var == "WEBSERVER_STATE") return g_webserver_state ? "checked" : "";
+    if(var == "WAKE_TIME_VALUE") return g_wake_up_time;
+    if(var == "SLEEP_TIME_VALUE") return g_sleep_time;
+    
+    return String("");
+}
+
+// Localiza ou cadastra host no vetor global por ID
 inline TelemetryData* get_or_create_host(const char* host_id) {
     for (auto& item : g_telemetry_list) {
-        if (strcmp(item.id, host_id) == 0) {
-            return &item;
-        }
+        if (strcmp(item.id, host_id) == 0) return &item;
     }
     TelemetryData new_host;
     strncpy(new_host.id, host_id, sizeof(new_host.id) - 1);
@@ -111,33 +141,19 @@ inline void update_display_and_ws() {
 inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, data, len);
-
     if (error) return false;
 
-    // Identificação do host
     const char* host_id = "N/A";
-    if (doc["id"].is<const char*>()) {
-        host_id = doc["id"];
-    } else if (doc["servidor"].is<const char*>()) {
-        host_id = doc["servidor"];
-    } else if (doc["host"].is<const char*>()) {
-        host_id = doc["host"];
-    }
+    if (doc["id"].is<const char*>()) host_id = doc["id"];
+    else if (doc["servidor"].is<const char*>()) host_id = doc["servidor"];
+    else if (doc["host"].is<const char*>()) host_id = doc["host"];
 
     TelemetryData* target_host = get_or_create_host(host_id);
     target_host->last_seen_ms = millis();
 
-    if (doc["id"].is<const char*>()) {
-        strncpy(target_host->id, doc["id"], sizeof(target_host->id) - 1);
-    }
-
-    if (doc["ip"].is<const char*>()) {
-        strncpy(target_host->ip, doc["ip"], sizeof(target_host->ip) - 1);
-    }
-
-    if (doc["mac"].is<const char*>()) {
-        strncpy(target_host->mac, doc["mac"], sizeof(target_host->mac) - 1);
-    }
+    if (doc["id"].is<const char*>()) strncpy(target_host->id, doc["id"], sizeof(target_host->id) - 1);
+    if (doc["ip"].is<const char*>()) strncpy(target_host->ip, doc["ip"], sizeof(target_host->ip) - 1);
+    if (doc["mac"].is<const char*>()) strncpy(target_host->mac, doc["mac"], sizeof(target_host->mac) - 1);
 
     if (doc["servidor"].is<const char*>()) {
         strncpy(target_host->host, doc["servidor"], sizeof(target_host->host) - 1);
@@ -145,21 +161,10 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
         strncpy(target_host->host, doc["host"], sizeof(target_host->host) - 1);
     }
 
-    if (doc["datetime"].is<const char*>()) {
-        strncpy(target_host->datetime, doc["datetime"], sizeof(target_host->datetime) - 1);
-    }
-
-    if (!doc["epoch_timestamp"].isNull()) {
-        target_host->epoch_timestamp = doc["epoch_timestamp"].as<uint64_t>();
-    }
-
-    if (doc["uptime"].is<const char*>()) {
-        strncpy(target_host->uptime, doc["uptime"], sizeof(target_host->uptime) - 1);
-    }
-
-    if (doc["logo_url"].is<const char*>()) {
-        strncpy(target_host->logo_url, doc["logo_url"], sizeof(target_host->logo_url) - 1);
-    }
+    if (doc["datetime"].is<const char*>()) strncpy(target_host->datetime, doc["datetime"], sizeof(target_host->datetime) - 1);
+    if (!doc["epoch_timestamp"].isNull()) target_host->epoch_timestamp = doc["epoch_timestamp"].as<uint64_t>();
+    if (doc["uptime"].is<const char*>()) strncpy(target_host->uptime, doc["uptime"], sizeof(target_host->uptime) - 1);
+    if (doc["logo_url"].is<const char*>()) strncpy(target_host->logo_url, doc["logo_url"], sizeof(target_host->logo_url) - 1);
 
     if (doc["sistema_operacional"].is<JsonObject>()) {
         JsonObject so = doc["sistema_operacional"];
@@ -203,7 +208,6 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     target_host->online = true;
     target_host->updated = true;
 
-    // Sincronização com o display e o WebSocket
     if (g_telemetry_list.size() == 1) {
         g_telemetry = *target_host;
         g_telemetry.updated = true;
@@ -222,24 +226,66 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
 
 inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client, 
                         AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    if (!g_webserver_state) return;
+
     if (type == WS_EVT_CONNECT) {
         client->text(build_json_string());
     } else if (type == WS_EVT_DATA) {
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
         if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-            if (parse_telemetry_json(data, len)) {
-                // g_telemetry.updated é alterado automaticamente se for o host visível no TFT
-            }
+            parse_telemetry_json(data, len);
         }
     }
 }
 
+// Handler para o POST /api/telemetry
 inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    // Bloqueia e envia o 503 apenas no primeiro chunk (index == 0)
+    if (!g_webserver_state) {
+        if (index == 0) {
+            request->send(503, "application/json", "{\"status\":\"paused\",\"message\":\"Serviço suspenso via painel\"}");
+        }
+        return;
+    }
+
     if (index + len < total) return;
 
     if (!parse_telemetry_json(data, len)) {
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
         return;
+    }
+
+    request->send(200, "application/json", "{\"status\":\"sucess\"}");
+}
+
+// Handler para salvar as configurações enviadas da página web (/config)
+inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (index + len < total) return;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, data, len);
+
+    if (error) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
+        return;
+    }
+
+    if (!doc["webserver"].isNull()) {
+        bool newState = doc["webserver"].as<bool>();
+        if (g_webserver_state != newState) {
+            g_webserver_state = newState;
+            if (!g_webserver_state) {
+                ws.closeAll(); // Encerra WebSockets ativos se o serviço for pausado
+            }
+        }
+    }
+
+    if (doc["wake_time"].is<const char*>()) {
+        g_wake_up_time = doc["wake_time"].as<String>();
+    }
+
+    if (doc["sleep_time"].is<const char*>()) {
+        g_sleep_time = doc["sleep_time"].as<String>();
     }
 
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
@@ -261,25 +307,37 @@ inline void setup_web_server() {
         request->send(200, "text/html", index_html);
     });
 
-    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) {
-        request->send(200);
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", config_html, processor);
     });
 
-    server.on("/api/telemetry", HTTP_POST, 
-        [](AsyncWebServerRequest *request) {}, 
-        NULL, 
+    // CORS Options Pre-flight
+    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+    server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+
+    // API Rota Telemetria
+    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
         handle_post_telemetry
     );
 
+    // API Rota Configurações
+    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+        handle_post_config
+    );
+
     server.begin();
+    Serial.println("Servidor HTTP Async Iniciado!");
 }
 
 inline void process_web_server_tasks() {
+    // Se o serviço estiver desligado pelo switch, congela os loops pesados
+    if (!g_webserver_state) return;
+
     ws.cleanupClients();
 
     uint32_t now = millis();
 
-    // Verificação de expiração de hosts (2 voltas no carrossel sem atualização)
+    // Verificação de expiração de hosts
     if (!g_telemetry_list.empty()) {
         uint32_t timeout_threshold_ms = DISPLAY_ROTATION_INTERVAL_MS * 2 * g_telemetry_list.size();
         bool list_changed = false;
@@ -308,7 +366,7 @@ inline void process_web_server_tasks() {
         }
     }
 
-    // Rotação do carrossel do display a cada 1 minuto e 30 segundos
+    // Rotação do carrossel do display
     if (!g_telemetry_list.empty()) {
         if (now - g_last_host_switch_ms >= DISPLAY_ROTATION_INTERVAL_MS) {
             g_last_host_switch_ms = now;
