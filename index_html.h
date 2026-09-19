@@ -11,6 +11,8 @@ static const char index_html[] = R"rawliteral(
   <title>Dashboard de Telemetria</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
+    @import url('https://fonts.googleapis.com/css2?family=Vast+Shadow&display=swap');
     :root {
       --bg-main: #0c0517;
       --bg-sidebar: #120724;
@@ -142,6 +144,12 @@ static const char index_html[] = R"rawliteral(
         <select id="hostSelect" class="select-host" onchange="updateHostVisibility()">
           <option value="ALL">Todos os Hosts</option>
         </select>
+        <div class="conteiner_right">
+            <div class="data_hora">
+                <p id="current_hour">--:--:--</p>
+                <p id="current_date">--/--/----</p>
+            </div>
+        </div>
         <span id="status" class="status">Conectando...</span>
       </div>
     </header>
@@ -513,6 +521,31 @@ static const char index_html[] = R"rawliteral(
     }
 
     window.addEventListener('load', initWebSocket);
+
+    // RELÓGIO (DATE & HOUR)
+    const currentHourElement = document.getElementById('current_hour');
+    const currentDateElement = document.getElementById('current_date');
+
+    async function updateDateTime() {
+        try {
+            const response = await fetch('/datetime');
+            if (response.ok) {
+                const data = await response.json();
+                currentHourElement.textContent = data.time;
+                currentDateElement.textContent = data.date;
+            } else {
+                currentHourElement.textContent = "--:--:--";
+                currentDateElement.textContent = "--/--/----";
+            }
+        } catch (error) {
+            console.error("Erro de rede ao buscar data/hora:", error);
+            currentHourElement.textContent = "";
+            currentDateElement.innerHTML = '<span class="material-symbols-outlined icon">wifi_off</span>';
+        }
+    }
+    setInterval(updateDateTime, 1000); 
+    updateDateTime();
+
   </script>
 </body>
 </html>

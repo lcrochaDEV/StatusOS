@@ -1,8 +1,7 @@
 #### Ideias
 1. Colocar as % dentro do circuilo no dashbord.
-2. Por o total do hd a baixo da barra no canto diretiro.
-3. se após 5 minutos não hover nunum payload vai entrar uma porteção de tela.
-4. CORREÇÃO NO ACCESSPOIT
+2. CORREÇÃO NO ACCESSPOIT
+3. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
 
 
 ### CONFIGURAÇÕES DE TELA DO ARQUIVO User_Setup.h
@@ -134,9 +133,10 @@ LC_ALL=C # Força separador decimal padrão (ponto)
 # ------------------------------------------------------------------------------
 readonly DEFAULT_ENDPOINT="http://192.168.1.6/api/telemetry"
 readonly DEFAULT_TIMEOUT=5
+readonly DEFAULT_LOGO="https://cdn-icons-png.flaticon.com/512/518/518713.png" # Logo Padrão/Genérica
 readonly DEFAULT_LOGO_UBUNTU="https://assets.ubuntu.com/v1/29383635-ubuntu-logo-2022.png"
 readonly DEFAULT_LOGO_RASPBERRY="https://www.raspberrypi.com/app/uploads/2020/06/raspberrry_pi_logo.png"
-readonly DEFAULT_SERVER_NAME=""
+readonly DEFAULT_SERVER_NAME="Server-RBP"
 
 SERVER_NAME="${SERVER_NAME:-$DEFAULT_SERVER_NAME}"
 ENDPOINT_URL="${ENDPOINT_URL:-$DEFAULT_ENDPOINT}"
@@ -159,15 +159,35 @@ check_dependencies() {
 # ------------------------------------------------------------------------------
 # Funções Coletoras de Dados
 # ------------------------------------------------------------------------------
+get_mac() {
+    local iface mac
+    iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5}' | head -n 1)
+    mac=$(cat /sys/class/net/"${iface:-eth0}"/address 2>/dev/null | tr '[:lower:]' '[:upper:]' || echo "00:00:00:00:00:00")
+    echo "${mac:-00:00:00:00:00:00}"
+}
+
+get_ip() {
+    local ip
+    ip=$(ip route get 1.1.1.1 2>/dev/null | grep -oP 'src \K\S+' || hostname -I | awk '{print $1}')
+    echo "${ip:-0.0.0.0}"
+}
+
+get_id() {
+    local mac="$1"
+    echo "$mac" | tr -d ':-'
+}
+
 get_os_info() {
-    local name="Linux" logo="$DEFAULT_LOGO_UBUNTU"
+    local name="Linux" logo="$DEFAULT_LOGO"
     if [[ -f /etc/os-release ]]; then
         name=$(source /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || name=$(uname -s)
     else
         name=$(uname -s)
     fi
 
-    if [[ "$name" =~ [Rr]aspbian|[Rr]aspberry ]]; then
+    if [[ "$name" =~ [Uu]buntu ]]; then
+        logo="$DEFAULT_LOGO_UBUNTU"
+    elif [[ "$name" =~ [Rr]aspbian|[Rr]aspberry ]]; then
         logo="$DEFAULT_LOGO_RASPBERRY"
     fi
 
@@ -242,10 +262,15 @@ get_memory_metrics() {
     echo "$total $used $pct"
 }
 
-get_disk_percent() {
-    local pct_str
-    pct_str=$(df -P / | awk 'END {print $5}')
-    echo "${pct_str%%%}"
+get_disk_metrics() {
+    local total_gb=0.0 used_gb=0.0 pct=0
+    if df_out=$(df -Pk / 2>/dev/null | awk 'END {print $2, $3, $5}'); then
+        read -r total_kb used_kb pct_str <<< "$df_out"
+        total_gb=$(awk -v t="${total_kb:-0}" 'BEGIN {printf "%.1f", t/1048576}')
+        used_gb=$(awk -v u="${used_kb:-0}" 'BEGIN {printf "%.1f", u/1048576}')
+        pct="${pct_str%%%}"
+    fi
+    echo "$total_gb $used_gb $pct"
 }
 
 get_disk_free() {
@@ -258,11 +283,17 @@ get_disk_free() {
 # Montagem do Payload no novo formato JSON
 # ------------------------------------------------------------------------------
 build_telemetry_payload() {
-    local host uptime timestamp os_name os_logo kernel arch cpu_temp cpu_load mem_total_mb mem_used_mb mem_pct disk_pct disk_free os_info
+    local id ip mac host uptime timestamp os_name os_logo kernel arch cpu_temp cpu_load mem_total_mb mem_used_mb mem_pct disk_total_gb disk_used_gb disk_pct disk_free os_info datetime epoch_timestamp
+
+    mac=$(get_mac)
+    ip=$(get_ip)
+    id=$(get_id "$mac")
 
     host="${SERVER_NAME:-$(hostname 2>/dev/null || echo "Desconhecido")}"
     uptime=$(get_uptime_formatted)
     timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    datetime=$(date +"%Y-%m-%d %H:%M:%S")
+    epoch_timestamp=$(date +%s)
 
     os_info=$(get_os_info)
     os_name="${os_info%%|*}"
@@ -274,7 +305,7 @@ build_telemetry_payload() {
     cpu_load=$(get_cpu_load)
 
     read -r mem_total_mb mem_used_mb mem_pct <<< "$(get_memory_metrics)"
-    disk_pct=$(get_disk_percent)
+    read -r disk_total_gb disk_used_gb disk_pct <<< "$(get_disk_metrics)"
     disk_free=$(get_disk_free)
 
     # Fallbacks numéricos de segurança
@@ -283,12 +314,19 @@ build_telemetry_payload() {
     mem_total_mb="${mem_total_mb:-0}"
     mem_used_mb="${mem_used_mb:-0}"
     mem_pct="${mem_pct:-0.00}"
+    disk_total_gb="${disk_total_gb:-0.0}"
+    disk_used_gb="${disk_used_gb:-0.0}"
     disk_pct="${disk_pct:-0}"
 
     cat <<EOF
 {
+  "id": "$id",
+  "ip": "$ip",
+  "mac": "$mac",
   "host": "$host",
   "timestamp": "$timestamp",
+  "datetime": "$datetime",
+  "epoch_timestamp": $epoch_timestamp,
   "uptime": "$uptime",
   "sistema_operacional": {
     "nome": "$os_name",
@@ -305,6 +343,8 @@ build_telemetry_payload() {
       "percentual": $mem_pct
     },
     "disco": {
+      "total_gb": $disk_total_gb,
+      "usado_gb": $disk_used_gb,
       "uso_percentual": $disk_pct,
       "espaco_livre": "$disk_free"
     }
@@ -392,9 +432,10 @@ set -euo pipefail
 
 # Arquivo alvo a ser reconfigurado
 readonly TARGET_SCRIPT="telemetry.sh"
+readonly TARGET_SERVICE="/etc/systemd/system/telemetry.service"
 
 # ------------------------------------------------------------------------------
-# Validação do Arquivo de telemetry
+# Validação do Arquivo de Telemetry
 # ------------------------------------------------------------------------------
 if [[ ! -f "$TARGET_SCRIPT" ]]; then
     printf "[ERRO] Arquivo '%s' não encontrado no diretório atual!\n" "$TARGET_SCRIPT" >&2
@@ -413,7 +454,7 @@ CURRENT_TIMEOUT=$(grep -E '^readonly DEFAULT_TIMEOUT=' "$TARGET_SCRIPT" | cut -d
 # Interface Interativa de Terminal
 # ------------------------------------------------------------------------------
 printf "\n==================================================\n"
-printf "       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRytelemetry\n"
+printf "       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRy\n"
 printf "==================================================\n\n"
 
 # 1. Prompt para URL do Servidor
@@ -440,6 +481,19 @@ sed -i "s|^readonly DEFAULT_ENDPOINT=.*|readonly DEFAULT_ENDPOINT=\"${NEW_ENDPOI
 sed -i "s|^readonly DEFAULT_TIMEOUT=.*|readonly DEFAULT_TIMEOUT=${NEW_TIMEOUT}|" "$TARGET_SCRIPT"
 sed -i "s|^readonly DEFAULT_SERVER_NAME=.*|readonly DEFAULT_SERVER_NAME=\"${NEW_SERVER_NAME}\"|" "$TARGET_SCRIPT"
 sed -i "s|^readonly DEFAULT_LOGO=.*|readonly DEFAULT_LOGO=\"${NEW_LOGO}\"|" "$TARGET_SCRIPT"
+
+# ------------------------------------------------------------------------------
+# Atualização opcional no /etc/systemd/system/telemetry.service e Restart
+# ------------------------------------------------------------------------------
+if [[ -f "$TARGET_SERVICE" ]]; then
+    sudo sed -i "s|Environment=ENDPOINT_URL=.*|Environment=ENDPOINT_URL=\"${NEW_ENDPOINT}\"|" "$TARGET_SERVICE"
+    sudo systemctl daemon-reload
+    sudo systemctl restart telemetry.service
+    printf "[INFO] Serviço telemetry.service atualizado e reiniciado com sucesso.\n"
+else
+    printf "[AVISO] Arquivo de serviço '%s' não encontrado. Pulando atualização do systemd.\n" "$TARGET_SERVICE"
+fi
+
 # ------------------------------------------------------------------------------
 # Confirmação Final
 # ------------------------------------------------------------------------------
@@ -451,41 +505,6 @@ printf "  • URL Server : %s\n" "$NEW_ENDPOINT"
 printf "  • URL Logo   : %s\n" "$NEW_LOGO"
 printf "  • Timeout    : %ss\n" "$NEW_TIMEOUT"
 printf "==================================================\n\n"
-```
-
-#### Exemplo de Uso no Terminal
-#### Caso 1: Alterando os valores
-
-```
-==================================================
-       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRytelemetry
-==================================================
-
-URL Server [http://192.168.1.50/api/telemetry]: http://10.0.0.150:8080/api/telemetry
-Tempo de Timeout (segundos) [5]: 10
-
-==================================================
-✔ Os dados foram alterados com sucesso!
-==================================================
-  • URL Server : http://10.0.0.150:8080/api/telemetry
-  • Timeout    : 10s
-==================================================
-```
-#### Caso 2: Mantendo os valores padrão (apenas pressionando Enter)
-```
-==================================================
-       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRytelemetry
-==================================================
-
-URL Server [http://10.0.0.150:8080/api/telemetry]: <Enter>
-Tempo de Timeout (segundos) [10]: <Enter>
-
-==================================================
-✔ Os dados foram alterados com sucesso!
-==================================================
-  • URL Server : http://10.0.0.150:8080/api/telemetry
-  • Timeout    : 10s
-==================================================
 ```
 
 

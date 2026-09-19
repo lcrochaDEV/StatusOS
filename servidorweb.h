@@ -10,6 +10,9 @@
 #include "index_html.h"
 #include "config_html.h"
 
+#include "Hours_Time.h"
+extern Hours_Time hours_Time_exec;
+
 #include "PhysicalAccessControl.h"
 PhysicalAccessControl physicalAccessControl; 
 
@@ -49,12 +52,17 @@ inline AsyncWebServer server(80);
 inline AsyncWebSocket ws("/ws");
 
 // Variáveis Globais de Estado do Servidor/Configurações
-inline bool g_webserver_state = true;
-inline String g_wake_up_time = "07:00";
-inline String g_sleep_time = "22:00";
+bool webserverState = true;
+
+
+String getSwitchState(bool state) {
+    return state ? "checked" : ""; // Retorna "checked" se o estado for true (ligado), ou uma string vazia se for false (desligado)
+}
+
 
 // Protótipos de Funções
 String processor(const String& var);
+void handleDateTime(AsyncWebServerRequest *request);
 
 // Processador de Placeholders do HTML
 String processor(const String& var) {
@@ -69,11 +77,57 @@ String processor(const String& var) {
     if(var == "SKETCH_SIZE_VALUE")    return physicalAccessControl.sketch_Size();
 
     // Placeholders do Form/Switch
-    if(var == "WEBSERVER_STATE") return g_webserver_state ? "checked" : "";
-    if(var == "WAKE_TIME_VALUE") return g_wake_up_time;
-    if(var == "SLEEP_TIME_VALUE") return g_sleep_time;
+    if(var == "WEBSERVER_STATE") return getSwitchState(webserverState);
+    if(var == "WAKE_TIME_VALUE") return String(hours_Time_exec.getHoursWakeon()); // Retorna o valor da função getHoursWakeon()
+    if(var == "SLEEP_TIME_VALUE") return String(hours_Time_exec.getHoursSleep()); // Retorna o valor da função getHoursSleep()
     
     return String("");
+}
+
+// Função que lida com a alternância de estado de qualquer switch
+void handleToggle(AsyncWebServerRequest *request) {
+    String param = "state";
+    String value = "toggle";
+
+    if (request->hasParam(param)) value = request->getParam(param)->value();
+
+    Serial.print("Comando de alternância recebido: ");
+    Serial.println(value);
+
+    // Verifica qual switch deve ser alternado
+    if (value == "webserver") {
+        webserverState = !webserverState;
+        Serial.printf("Servidor Web alternado para: %s\n", webserverState ? "LIGADO" : "DESLIGADO");
+        // Lembre-se: Desligar o servidor web exige reinício ou parada forçada, cuidado!
+    }
+
+    // Após alternar o estado, redireciona o usuário de volta para a página inicial
+    request->redirect("/");
+}
+
+void handleDateTime(AsyncWebServerRequest *request) {
+    // Obter o tempo atual do sistema (assumindo que o NTP foi configurado)
+    time_t now = time(nullptr); 
+    struct tm timeinfo;
+    localtime_r(&now, &timeinfo);
+    
+    // Alocação de memória para strings formatadas
+    char dateString[11]; // DD/MM/YYYY + '\0'
+    char hourString[9]; // HH:MM:SS + '\0'
+
+    // Formata a data e hora
+    strftime(dateString, sizeof(dateString), "%d/%m/%Y", &timeinfo);
+    strftime(hourString, sizeof(hourString), "%H:%M:%S", &timeinfo);
+    
+    // Constrói a resposta JSON para o JavaScript
+    String responseJson = "{\"date\":\"";
+    responseJson += dateString;
+    responseJson += "\",\"time\":\"";
+    responseJson += hourString;
+    responseJson += "\"}";
+
+    // Envia a resposta JSON. É ESSENCIAL usar send() aqui.
+    request->send(200, "application/json", responseJson);
 }
 
 // Localiza ou cadastra host no vetor global por ID
@@ -226,7 +280,7 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
 
 inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client, 
                         AwsEventType type, void *arg, uint8_t *data, size_t len) {
-    if (!g_webserver_state) return;
+    if (!webserverState) return;
 
     if (type == WS_EVT_CONNECT) {
         client->text(build_json_string());
@@ -241,7 +295,7 @@ inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client
 // Handler para o POST /api/telemetry
 inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     // Bloqueia e envia o 503 apenas no primeiro chunk (index == 0)
-    if (!g_webserver_state) {
+    if (!webserverState) {
         if (index == 0) {
             request->send(503, "application/json", "{\"status\":\"paused\",\"message\":\"Serviço suspenso via painel\"}");
         }
@@ -272,66 +326,25 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
 
     if (!doc["webserver"].isNull()) {
         bool newState = doc["webserver"].as<bool>();
-        if (g_webserver_state != newState) {
-            g_webserver_state = newState;
-            if (!g_webserver_state) {
+        if (webserverState != newState) {
+            webserverState = newState;
+            if (!webserverState) {
                 ws.closeAll(); // Encerra WebSockets ativos se o serviço for pausado
             }
         }
     }
 
-    if (doc["wake_time"].is<const char*>()) {
-        g_wake_up_time = doc["wake_time"].as<String>();
-    }
+    // Atualiza diretamente na instância hours_Time_exec
+    if (doc["wake_time"].is<const char*>()) hours_Time_exec.setHoursWakeon(doc["wake_time"].as<String>());
 
-    if (doc["sleep_time"].is<const char*>()) {
-        g_sleep_time = doc["sleep_time"].as<String>();
-    }
+    if (doc["sleep_time"].is<const char*>()) hours_Time_exec.setHoursSleep(doc["sleep_time"].as<String>());
 
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
 }
 
-inline void setup_web_server() {
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-
-    ws.onEvent(on_ws_event);
-    server.addHandler(&ws);
-
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Dashboard Server Online");
-    });
-
-    server.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", index_html);
-    });
-
-    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", config_html, processor);
-    });
-
-    // CORS Options Pre-flight
-    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
-    server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
-
-    // API Rota Telemetria
-    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-        handle_post_telemetry
-    );
-
-    // API Rota Configurações
-    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-        handle_post_config
-    );
-
-    server.begin();
-    Serial.println("Servidor HTTP Async Iniciado!");
-}
-
 inline void process_web_server_tasks() {
     // Se o serviço estiver desligado pelo switch, congela os loops pesados
-    if (!g_webserver_state) return;
+    if (!webserverState) return;
 
     ws.cleanupClients();
 
@@ -380,6 +393,56 @@ inline void process_web_server_tasks() {
         g_telemetry.updated = false;
         update_display_and_ws();
     }
+}
+
+inline void setup_web_server() {
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+    ws.onEvent(on_ws_event);
+    server.addHandler(&ws);
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Dashboard Server Online");
+    });
+
+    server.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!webserverState) {
+            request->send(503, "text/html", 
+                "<html><head><meta charset='UTF-8'></head><body style='background:#0a0413;color:#fff;font-family:sans-serif;text-align:center;padding-top:100px;'>"
+                "<h1>Serviço em Pausa</h1>"
+                "<p>A telemetria do dashboard está temporariamente desativada.</p>"
+                "<a href='/config' style='color:#00f2fe;'>Acessar Painel de Configurações</a>"
+                "</body></html>"
+            );
+            return;
+        }
+        request->send(200, "text/html", index_html);
+    });
+    // NOVO: Rota para Data e Hora Dinâmicas (JSON)
+    server.on("/datetime", HTTP_GET, handleDateTime); 
+    
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", config_html, processor);
+    });
+
+    // CORS Options Pre-flight
+    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+    server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+
+    // API Rota Telemetria
+    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+        handle_post_telemetry
+    );
+
+    // API Rota Configurações
+    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
+        handle_post_config
+    );
+
+    server.begin();
+    Serial.println("Servidor HTTP Async Iniciado!");
 }
 
 #endif // SERVIDORWEB_H

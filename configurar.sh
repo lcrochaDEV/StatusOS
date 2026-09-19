@@ -9,9 +9,10 @@ set -euo pipefail
 
 # Arquivo alvo a ser reconfigurado
 readonly TARGET_SCRIPT="telemetry.sh"
+readonly TARGET_SERVICE="/etc/systemd/system/telemetry.service"
 
 # ------------------------------------------------------------------------------
-# Validação do Arquivo de Telemetria
+# Validação do Arquivo de Telemetry
 # ------------------------------------------------------------------------------
 if [[ ! -f "$TARGET_SCRIPT" ]]; then
     printf "[ERRO] Arquivo '%s' não encontrado no diretório atual!\n" "$TARGET_SCRIPT" >&2
@@ -22,7 +23,7 @@ fi
 # Leitura dos Parâmetros Atuais do telemetry.sh
 # ------------------------------------------------------------------------------
 CURRENT_SERVER_NAME=$(grep -E '^readonly DEFAULT_SERVER_NAME=' "$TARGET_SCRIPT" | cut -d'"' -f2 || echo "")
-CURRENT_ENDPOINT=$(grep -E '^readonly DEFAULT_ENDPOINT=' "$TARGET_SCRIPT" | cut -d'"' -f2 || echo "http://192.168.1.50/api/telemetria")
+CURRENT_ENDPOINT=$(grep -E '^readonly DEFAULT_ENDPOINT=' "$TARGET_SCRIPT" | cut -d'"' -f2 || echo "http://192.168.1.50/api/telemetry")
 CURRENT_LOGO=$(grep -E '^readonly DEFAULT_LOGO=' "$TARGET_SCRIPT" | cut -d'"' -f2 || echo "https://assets.ubuntu.com/v1/29383635-ubuntu-logo-2022.png")
 CURRENT_TIMEOUT=$(grep -E '^readonly DEFAULT_TIMEOUT=' "$TARGET_SCRIPT" | cut -d'=' -f2 || echo "5")
 
@@ -30,7 +31,7 @@ CURRENT_TIMEOUT=$(grep -E '^readonly DEFAULT_TIMEOUT=' "$TARGET_SCRIPT" | cut -d
 # Interface Interativa de Terminal
 # ------------------------------------------------------------------------------
 printf "\n==================================================\n"
-printf "       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRIA\n"
+printf "       CONFIGURAÇÃO EM TEMPO REAL - TELEMETRy\n"
 printf "==================================================\n\n"
 
 # 1. Prompt para URL do Servidor
@@ -57,6 +58,19 @@ sed -i "s|^readonly DEFAULT_ENDPOINT=.*|readonly DEFAULT_ENDPOINT=\"${NEW_ENDPOI
 sed -i "s|^readonly DEFAULT_TIMEOUT=.*|readonly DEFAULT_TIMEOUT=${NEW_TIMEOUT}|" "$TARGET_SCRIPT"
 sed -i "s|^readonly DEFAULT_SERVER_NAME=.*|readonly DEFAULT_SERVER_NAME=\"${NEW_SERVER_NAME}\"|" "$TARGET_SCRIPT"
 sed -i "s|^readonly DEFAULT_LOGO=.*|readonly DEFAULT_LOGO=\"${NEW_LOGO}\"|" "$TARGET_SCRIPT"
+
+# ------------------------------------------------------------------------------
+# Atualização opcional no /etc/systemd/system/telemetry.service e Restart
+# ------------------------------------------------------------------------------
+if [[ -f "$TARGET_SERVICE" ]]; then
+    sudo sed -i "s|Environment=ENDPOINT_URL=.*|Environment=ENDPOINT_URL=\"${NEW_ENDPOINT}\"|" "$TARGET_SERVICE"
+    sudo systemctl daemon-reload
+    sudo systemctl restart telemetry.service
+    printf "[INFO] Serviço telemetry.service atualizado e reiniciado com sucesso.\n"
+else
+    printf "[AVISO] Arquivo de serviço '%s' não encontrado. Pulando atualização do systemd.\n" "$TARGET_SERVICE"
+fi
+
 # ------------------------------------------------------------------------------
 # Confirmação Final
 # ------------------------------------------------------------------------------
