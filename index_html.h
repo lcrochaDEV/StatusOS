@@ -32,7 +32,7 @@ static const char index_html[] = R"rawliteral(
     .topbar { height: 60px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-card); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; }
     .brand { font-size: 20px; font-weight: bold; color: var(--accent-cyan); display: flex; align-items: center; gap: 10px; }
     .topbar-right { display: flex; align-items: center; gap: 15px; }
-    nav .icon {
+    .conteiner_right .icon {
         color: #cf0844;
         font-weight: bold;
         font-size: 30px;
