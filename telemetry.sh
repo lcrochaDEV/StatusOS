@@ -23,6 +23,22 @@ ENDPOINT_URL="${ENDPOINT_URL:-$DEFAULT_ENDPOINT}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-$DEFAULT_TIMEOUT}"
 OS_LOGO_URL="${OS_LOGO_URL:-}"
 
+
+# ------------------------------------------------------------------------------
+# Configuração Externa (Garante que o config.env exista)
+# ------------------------------------------------------------------------------
+CONFIG_FILE="/home/pi/telemetry/config.env"
+DEFAULT_FALLBACK_ENDPOINT="http://192.168.1.6/api/telemetry"
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    echo "ENDPOINT_URL=\"$DEFAULT_FALLBACK_ENDPOINT\"" > "$CONFIG_FILE"
+    log_info "Arquivo config.env criado automaticamente com o endpoint padrão."
+fi
+
+# Carrega a variável ENDPOINT_URL do arquivo de configuração
+source "$CONFIG_FILE"
+ENDPOINT_URL="${ENDPOINT_URL:-$DEFAULT_FALLBACK_ENDPOINT}"
+
 # ------------------------------------------------------------------------------
 # Logging e Validações
 # ------------------------------------------------------------------------------
@@ -164,7 +180,7 @@ get_disk_free() {
 # ------------------------------------------------------------------------------
 auto_discovery_esp32() {
     local default_route base_ip i target response telemetry_target
-    local service_file="/etc/systemd/system/telemetry.service"
+    local config_file="/home/pi/telemetry/config.env"
     
     default_route=$(ip route show default 2>/dev/null | awk '/default/ {print $3}' || echo "")
     if [[ -z "$default_route" ]]; then
@@ -188,13 +204,9 @@ auto_discovery_esp32() {
             ENDPOINT_URL="$telemetry_target"
             log_info "ESP32 encontrado! Novo endpoint: $telemetry_target"
             
-            sed -i "s|readonly DEFAULT_ENDPOINT=.*|readonly DEFAULT_ENDPOINT=\"$telemetry_target\"|" "$0" 2>/dev/null || true
-            
-            if [[ -f "$service_file" ]]; then
-                sudo sed -i "s|Environment=ENDPOINT_URL=.*|Environment=ENDPOINT_URL=\"$telemetry_target\"|" "$service_file" 2>/dev/null || true
-                sudo systemctl daemon-reload 2>/dev/null || true
-                log_info "Arquivo telemetry.service atualizado com o novo IP."
-            fi
+            # Atualiza de forma 100% segura apenas o arquivo de configuração separado
+            echo "ENDPOINT_URL=\"$telemetry_target\"" > "$config_file"
+            log_info "Arquivo config.env atualizado com o novo IP."
             
             return 0
         fi
