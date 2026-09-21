@@ -2,7 +2,7 @@
 
 # ==============================================================================
 # Script: telemetry.sh
-# Descrição: Coletor de telemetry nativo em Bash adaptado ao novo schema JSON.
+# Descrição: Coletor de telemetry nativo em Bash adaptado ao novo schema JSON com Auto-Discovery.
 # ==============================================================================
 
 set -euo pipefail
@@ -160,6 +160,50 @@ get_disk_free() {
 }
 
 # ------------------------------------------------------------------------------
+# Função de Auto-Discovery (Varredura de Rede via /api/autodiscovery)
+# ------------------------------------------------------------------------------
+auto_discovery_esp32() {
+    local default_route base_ip i target response telemetry_target
+    local service_file="/etc/systemd/system/telemetry.service"
+    
+    default_route=$(ip route show default 2>/dev/null | awk '/default/ {print $3}' || echo "")
+    if [[ -z "$default_route" ]]; then
+        default_route=$(hostname -I | awk '{print $1}')
+    fi
+    base_ip=$(echo "$default_route" | cut -d'.' -f1-3)
+    
+    if [[ -z "$base_ip" ]]; then
+        return 1
+    fi
+    
+    log_info "Varredura iniciada na rede ${base_ip}.0/24 via /api/autodiscovery..."
+    for i in {1..254}; do
+        target="http://$base_ip.$i/api/autodiscovery"
+        response=$(curl -s --max-time 0.2 -X POST "$target" \
+            -H "Content-Type: application/json" \
+            -d '{"host":"AUTO_DISCOVERY_TEST"}' 2>/dev/null || echo "")
+        
+        if [[ "$response" == *'"status":"ok"'* ]] || [[ "$response" == *'status: ok'* ]]; then
+            telemetry_target="http://$base_ip.$i/api/telemetry"
+            ENDPOINT_URL="$telemetry_target"
+            log_info "ESP32 encontrado! Novo endpoint: $telemetry_target"
+            
+            sed -i "s|readonly DEFAULT_ENDPOINT=.*|readonly DEFAULT_ENDPOINT=\"$telemetry_target\"|" "$0" 2>/dev/null || true
+            
+            if [[ -f "$service_file" ]]; then
+                sudo sed -i "s|Environment=ENDPOINT_URL=.*|Environment=ENDPOINT_URL=\"$telemetry_target\"|" "$service_file" 2>/dev/null || true
+                sudo systemctl daemon-reload 2>/dev/null || true
+                log_info "Arquivo telemetry.service atualizado com o novo IP."
+            fi
+            
+            return 0
+        fi
+    done
+    log_error "Nenhum dispositivo respondeu ao autodiscovery na rede."
+    return 1
+}
+
+# ------------------------------------------------------------------------------
 # Montagem do Payload no novo formato JSON
 # ------------------------------------------------------------------------------
 build_telemetry_payload() {
@@ -188,7 +232,6 @@ build_telemetry_payload() {
     read -r disk_total_gb disk_used_gb disk_pct <<< "$(get_disk_metrics)"
     disk_free=$(get_disk_free)
 
-    # Fallbacks numéricos de segurança
     cpu_temp="${cpu_temp:-0.0}"
     cpu_load="${cpu_load:-0.0}"
     mem_total_mb="${mem_total_mb:-0}"
@@ -265,6 +308,12 @@ main() {
     payload=$(build_telemetry_payload)
 
     if ! send_payload "$payload"; then
+        log_info "Tentando recuperar a conexão através do Auto-Discovery..."
+        if auto_discovery_esp32; then
+            if send_payload "$payload"; then
+                exit 0
+            fi
+        fi
         exit 1
     fi
 }
