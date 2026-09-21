@@ -441,6 +441,11 @@ inline void setup_web_server() {
         handle_post_config
     );
 
+    // Endpoint de Autodiscovery
+    server.on("/api/autodiscovery", HTTP_POST, [](AsyncWebServerRequest *request) {
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+
     server.begin();
     Serial.println("Servidor HTTP Async Iniciado!");
 }
