@@ -265,13 +265,13 @@ static const char index_html[] PROGMEM = R"rawliteral(
   <!-- Menu Lateral Enquadrado na Lateral -->
   <div class="sidebar">
       <label for="menu-toggle" class="brand">
-          <span>≡</span>
+          <span class="material-symbols-outlined">menu</span>
           <text>Dashboard</text>
       </label>
       
       <ul class="nav-links">
-          <li><a href="/dashboard">📊 <span>Dashboard</span></a></li>
-          <li><a href="/config">⚙️ <span>Configurações</span></a></li>
+          <li><a href="/dashboard"><span class="material-symbols-outlined">dashboard</span> <span>Dashboard</span></a></li>
+          <li><a href="/config"><span class="material-symbols-outlined">settings</span> <span>Configurações</span></a></li>
       </ul>
   </div>
 

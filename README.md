@@ -1,37 +1,77 @@
 #### Ideias
 1. Colocar as % dentro do circuilo no dashbord.
-2. CORREÇÃO NO ACCESSPOIT
-3. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
+2. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
 
 
-### CONFIGURAÇÕES DE TELA DO ARQUIVO User_Setup.h
+# Telemetria & Monitoramento de Servidores (ESP32 + Linux Bash)
 
-| Pino do Display ILI9341 | Pino no ESP32 | Definição no Código
-| :--- | :--- | :--- | 
-| VCC | 3.3V (ou 5V) | Alimentação
-| GND | GND | Terra | 
-| CS | GPIO 15 | TFT_CS
-| RESET | GPIO 4 | TFT_RST
-| DC / RS | GPIO 2 | TFT_DC  
-| SDI / MOSI | GPIO 23 | TFT_MOSI
-| SCK / CLK | GPIO 18 | TFT_SCLK  
-| LED / BL | GPIO 21 | TFT_BL  
-| SDO / MISO | GPIO 19 | TFT_MISO  
+Sistema completo de monitoramento e telemetria para servidores Linux com exibição em tempo real em um display TFT ILI9341 de 2.8" gerenciado por um ESP32. O sistema é composto por um coletor de dados em Bash (executado como serviço no Linux) e um receptor Web embarcado no ESP32 com suporte a Auto-Discovery e ajuste dinâmico de configurações.
 
-```
+# 🚀 Funcionalidades do Projeto
+
+* Coleta Nativa de Telemetria no Linux (telemetry.sh):
+
+* * Métricas do Sistema: Identificação do Host, IP local, MAC Address, Uptime formatado, versão do Kernel e Arquitetura do SO.
+
+* * Hardware & Desempenho: Temperatura da CPU (°C), Carga da CPU (Load Average de 1 min), consumo de Memória RAM (Bytes brutos) e ocupação de Disco (Bytes brutos).
+
+* * Identificação Visual: Detecção automática do SO (Ubuntu, Raspbian, Linux genérico) com URL de logotipo dinâmico.
+
+* * Payload JSON Padronizado: Estrutura contendo dados brutos para que a interface (front-end) converta e formate as unidades de medida conforme necessário.
+
+* Auto-Discovery e Recuperação Automática de Conexão:
+
+* * Em caso de falha de comunicação com o endpoint configurado, o script realiza uma varredura automática na sub-rede (/24) disparando requisições em /api/autodiscovery.
+
+* * Assim que o ESP32 responde com {"status":"ok"}, o endereço IP é atualizado automaticamente no arquivo local config.env e o envio é restaurado sem intervenção manual.
+
+* Configuração em Tempo Real (configurar.sh):
+
+* * Interface interativa via terminal para alterar URL do servidor, timeout de requisição, nome do host e URL da logo.
+
+* * Atualização dinâmica via sed no script principal e re-sincronização automática do serviço no Systemd (telemetry.service).
+
+* Automação via Systemd (telemetry.service):
+
+* * Execução contínua em segundo plano no Linux, com inicialização automática no boot do sistema operacional e reinicialização automática após falhas.
+
+* Dashboard em Tela TFT SPI (ESP32 + ILI9341 2.8"):
+
+* * Conexão via barramento VSPI/SPI nativo com controle de brilho via PWM.
+
+* * Texto Padrão de Inicialização (Fallback): Exibição de mensagem/status padrão na tela ao ligar o ESP32 antes do recebimento do primeiro payload de dados.
+
+
+### 🛠️ Configurações de Tela & Hardware (ESP32)
+### Mapeamento de Pinos (Display ILI9341 2.8" SPI)
+
+| Pino do Display ILI9341 | Pino no ESP32 | Definição no Código | Função / Observação |
+| :--- | :--- | :--- | :--- |
+| VCC | 3.3V / 5V | Alimentação | Alimentação do módulo |
+| GND | GND | Terra | Terra comum |
+| CS | GPIO 15(ou GPIO 5) | TFT_CS | Chip Select SPI |
+| RESET	| GPIO 4 | TFT_RST | Reset do Display |
+| DC / RS | GPIO 2 | TFT_DC | Data / Command Select |
+| SDI / MOSI | GPIO 23 |TFT_MOSI | Dados SPI (Master Out) |
+| SCK / CLK | GPIO 18 | TFT_SCLK | Relógio SPI (Clock) |
+| LED / BL | GPIO 21 | TFT_BL | Controle de Backlight (PWM / Transistor) |
+| SDO / MISO | GPIO 19 | TFT_MISO | Dados SPI (Master In) |
+
+```c++
 // For ESP32 Dev board (only tested with ILI9341 display)
 // The hardware SPI can be mapped to any pins
 
 #define TFT_MISO 19
 #define TFT_MOSI 23
 #define TFT_SCLK 18
-#define TFT_CS   15/5  // Chip select control pin
+#define TFT_CS   15 | 5  // Chip select control pin (ou GPIO 5)
 #define TFT_DC    2  // Data Command control pin
 #define TFT_RST   4  // Reset pin (could connect to RST pin)
 //#define TFT_RST  -1  // Set TFT_RST to -1 if display RESET is connected to ESP32 board RST
+#define TFT_BL   21  // Backlight control pin
 ```
 
-### INSTALAÇÃO DO ANBIENTE LINUX
+### 🐧 Instalação e Configuração no Linux
 
 #### Passo 1: Criar a Pasta do Projeto
 Crie uma pasta dedicada para o script de monitoramento e acesse-a:
@@ -116,7 +156,9 @@ sudo systemctl status telemetry.service
 # Verificar log em tempo real
 
 ```
-#### telemetry.sh
+
+### 📜 Código dos Scripts
+#### 1. telemetry.sh
 ```bash
 #!/usr/bin/env bash
 
@@ -433,7 +475,9 @@ main() {
 main "$@"
 ```
 
-#### Passo a Passo de Criação e Execução
+### 2. configurar.sh
+#### Script utilitário interativo para reconfiguração dos parâmetros de rede e tempo real sem edição manual de arquivos.
+
 1. Criar e Salvar o Arquivo
 Certifique-se de estar na mesma pasta onde está o arquivo telemetry.sh:
 
