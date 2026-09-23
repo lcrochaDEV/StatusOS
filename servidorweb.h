@@ -10,12 +10,10 @@
 #include "index_html.h"
 #include "config_html.h"
 
-#include "Hours_Time.h"
-extern Hours_Time hours_Time_exec;
-
-#include "PhysicalAccessControl.h"
+#include "physicalAccessControl.h"
 PhysicalAccessControl physicalAccessControl; 
 
+// Estrutura de Telemetria mantendo DADOS BRUTOS (raw data)
 struct TelemetryData {
     char id[64] = "N/A";
     char ip[64] = "0.0.0.0";
@@ -27,12 +25,13 @@ struct TelemetryData {
     float temp = 0.0f;
     char logo_url[256] = "";
     float cpu_load = 0.0f;
-    int ram_pct = 0;
-    int ram_total_mb = 0;
-    int ram_used_mb = 0;
-    int disk_pct = 0;
-    float disk_total_gb = 0.0f;
-    float disk_used_gb = 0.0f;
+    
+    // Dados Brutos em Bytes
+    uint64_t ram_total_bytes = 0;
+    uint64_t ram_used_bytes  = 0;
+    uint64_t disk_total_bytes = 0;
+    uint64_t disk_used_bytes  = 0;
+    
     bool online = false;
     volatile bool updated = false;
     char datetime[64] = "";
@@ -43,7 +42,7 @@ struct TelemetryData {
 inline TelemetryData g_telemetry;
 inline std::vector<TelemetryData> g_telemetry_list;
 
-// Controle de carrossel do display TFT (1min 30s)
+// Controle do carrossel do display
 inline size_t g_current_display_index = 0;
 inline uint32_t g_last_host_switch_ms = 0;
 const uint32_t DISPLAY_ROTATION_INTERVAL_MS = 90000;
@@ -51,58 +50,27 @@ const uint32_t DISPLAY_ROTATION_INTERVAL_MS = 90000;
 inline AsyncWebServer server(80);
 inline AsyncWebSocket ws("/ws");
 
-// Variáveis Globais de Estado do Servidor/Configurações
-bool webserverState = true;
+inline bool g_webserver_state = true;
+inline String g_wake_up_time = "07:00";
+inline String g_sleep_time = "22:00";
 
-
-String getSwitchState(bool state) {
-    return state ? "checked" : ""; // Retorna "checked" se o estado for true (ligado), ou uma string vazia se for false (desligado)
-}
-
-
-// Protótipos de Funções
 String processor(const String& var);
-void handleDateTime(AsyncWebServerRequest *request);
 
-// Processador de Placeholders do HTML
 String processor(const String& var) {
     if(var == "SSID_VALUE") return (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "Desconectado";
     if(var == "IP_VALUE")   return (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "0.0.0.0";
     if(var == "MAC_VALUE")  return WiFi.macAddress();
 
     if(var == "MODULE_VALUE")         return physicalAccessControl.modelBoardESP();
-    if(var == "TOTAL_RAM_VALUE")      return physicalAccessControl.total_ram();
-    if(var == "FLASH_SIZE_VALUE")     return physicalAccessControl.flash_size();
-    if(var == "MENOR_RAM_SIZE_VALUE") return physicalAccessControl.menor_ram_size();
-    if(var == "SKETCH_SIZE_VALUE")    return physicalAccessControl.sketch_Size();
-
-    // Placeholders do Form/Switch
-    if(var == "WEBSERVER_STATE") return getSwitchState(webserverState);
-    if(var == "WAKE_TIME_VALUE") return String(hours_Time_exec.getHoursWakeon()); // Retorna o valor da função getHoursWakeon()
-    if(var == "SLEEP_TIME_VALUE") return String(hours_Time_exec.getHoursSleep()); // Retorna o valor da função getHoursSleep()
+    if (var == "TOTAL_RAM_VALUE")      return String((uint32_t)physicalAccessControl.total_ram_kb()) + " KB";
+    if (var == "FLASH_SIZE_VALUE")     return String((uint32_t)physicalAccessControl.flash_size_mb()) + " MB";
+    if (var == "MENOR_RAM_SIZE_VALUE") return String((uint32_t)physicalAccessControl.min_free_ram_kb()) + " KB";
+    if (var == "SKETCH_SIZE_VALUE")    return String((uint32_t)physicalAccessControl.sketch_size_kb()) + " KB";
+    if(var == "WEBSERVER_STATE") return g_webserver_state ? "checked" : "";
+    if(var == "WAKE_TIME_VALUE") return g_wake_up_time;
+    if(var == "SLEEP_TIME_VALUE") return g_sleep_time;
     
     return String("");
-}
-
-// Função que lida com a alternância de estado de qualquer switch
-void handleToggle(AsyncWebServerRequest *request) {
-    String param = "state";
-    String value = "toggle";
-
-    if (request->hasParam(param)) value = request->getParam(param)->value();
-
-    Serial.print("Comando de alternância recebido: ");
-    Serial.println(value);
-
-    // Verifica qual switch deve ser alternado
-    if (value == "webserver") {
-        webserverState = !webserverState;
-        Serial.printf("Servidor Web alternado para: %s\n", webserverState ? "LIGADO" : "DESLIGADO");
-        // Lembre-se: Desligar o servidor web exige reinício ou parada forçada, cuidado!
-    }
-
-    // Após alternar o estado, redireciona o usuário de volta para a página inicial
-    request->redirect("/");
 }
 
 void handleDateTime(AsyncWebServerRequest *request) {
@@ -130,18 +98,20 @@ void handleDateTime(AsyncWebServerRequest *request) {
     request->send(200, "application/json", responseJson);
 }
 
-// Localiza ou cadastra host no vetor global por ID
-inline TelemetryData* get_or_create_host(const char* host_id) {
+inline TelemetryData* get_or_create_host(const char* id_or_name) {
     for (auto& item : g_telemetry_list) {
-        if (strcmp(item.id, host_id) == 0) return &item;
+        if (strcmp(item.id, id_or_name) == 0 || strcmp(item.host, id_or_name) == 0) {
+            return &item;
+        }
     }
     TelemetryData new_host;
-    strncpy(new_host.id, host_id, sizeof(new_host.id) - 1);
-    new_host.last_seen_ms = millis();
+    strncpy(new_host.id, id_or_name, sizeof(new_host.id) - 1);
+    strncpy(new_host.host, id_or_name, sizeof(new_host.host) - 1);
     g_telemetry_list.push_back(new_host);
     return &g_telemetry_list.back();
 }
 
+// Gera o JSON com os DADOS BRUTOS de RAM e Disco para o Front-End converter
 inline String build_json_string() {
     JsonDocument doc;
     JsonArray hostsArray = doc.to<JsonArray>();
@@ -151,7 +121,6 @@ inline String build_json_string() {
         obj["id"] = item.id;
         obj["ip"] = item.ip;
         obj["mac"] = item.mac;
-        obj["server"] = item.host;
         obj["host"] = item.host;
         obj["datetime"] = item.datetime;
         obj["epoch_timestamp"] = item.epoch_timestamp;
@@ -160,14 +129,15 @@ inline String build_json_string() {
         obj["kernel"] = item.kernel;
         obj["temp"] = item.temp;
         obj["cpu_load"] = item.cpu_load;
-        obj["ram_pct"] = item.ram_pct;
-        obj["ram_total_mb"] = item.ram_total_mb;
-        obj["ram_used_mb"] = item.ram_used_mb;
-        obj["disk_pct"] = item.disk_pct;
-        obj["disk_total_gb"] = item.disk_total_gb;
-        obj["disk_used_gb"] = item.disk_used_gb;
+        
+        // Envio de Dados Brutos em Bytes
+        obj["ram_total_bytes"]  = item.ram_total_bytes;
+        obj["ram_used_bytes"]   = item.ram_used_bytes;
+        obj["disk_total_bytes"] = item.disk_total_bytes;
+        obj["disk_used_bytes"]  = item.disk_used_bytes;
+        
         obj["logo_url"] = item.logo_url;
-        obj["online"] = item.online;
+        obj["online"]   = item.online;
     }
 
     String jsonString;
@@ -176,7 +146,12 @@ inline String build_json_string() {
 }
 
 inline void update_display_and_ws() {
+    // Para o Display local TFT, se necessário, calculamos localmente
+    int ram_pct = (g_telemetry.ram_total_bytes > 0) ? (int)((g_telemetry.ram_used_bytes * 100ULL) / g_telemetry.ram_total_bytes) : 0;
+    int disk_pct = (g_telemetry.disk_total_bytes > 0) ? (int)((g_telemetry.disk_used_bytes * 100ULL) / g_telemetry.disk_total_bytes) : 0;
+
     if (ws.count() > 0) ws.textAll(build_json_string());
+
 
     update_telemetry_data(
         g_telemetry.host,
@@ -184,14 +159,15 @@ inline void update_display_and_ws() {
         g_telemetry.kernel,
         g_telemetry.temp,
         g_telemetry.cpu_load,
-        g_telemetry.ram_pct,
-        g_telemetry.disk_pct,
+        ram_pct,
+        disk_pct,
         g_telemetry.uptime,
         g_telemetry.logo_url
     );
     update_status(g_telemetry.online);
 }
 
+// Extrator flexível de dados brutos do JSON recebido
 inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, data, len);
@@ -209,11 +185,8 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     if (doc["ip"].is<const char*>()) strncpy(target_host->ip, doc["ip"], sizeof(target_host->ip) - 1);
     if (doc["mac"].is<const char*>()) strncpy(target_host->mac, doc["mac"], sizeof(target_host->mac) - 1);
 
-    if (doc["servidor"].is<const char*>()) {
-        strncpy(target_host->host, doc["servidor"], sizeof(target_host->host) - 1);
-    } else if (doc["host"].is<const char*>()) {
-        strncpy(target_host->host, doc["host"], sizeof(target_host->host) - 1);
-    }
+    if (doc["servidor"].is<const char*>()) strncpy(target_host->host, doc["servidor"], sizeof(target_host->host) - 1);
+    else if (doc["host"].is<const char*>()) strncpy(target_host->host, doc["host"], sizeof(target_host->host) - 1);
 
     if (doc["datetime"].is<const char*>()) strncpy(target_host->datetime, doc["datetime"], sizeof(target_host->datetime) - 1);
     if (!doc["epoch_timestamp"].isNull()) target_host->epoch_timestamp = doc["epoch_timestamp"].as<uint64_t>();
@@ -230,33 +203,48 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
         if (doc["kernel"].is<const char*>()) strncpy(target_host->kernel, doc["kernel"], sizeof(target_host->kernel) - 1);
     }
 
+    // Leitura Flexível de Métricas de Memória e Disco (Bytes ou conversão automática de KB/MB caso o agente seja antigo)
     if (doc["metricas"].is<JsonObject>()) {
         JsonObject metricas = doc["metricas"];
         if (!metricas["cpu_temp"].isNull()) target_host->temp = metricas["cpu_temp"].as<float>();
         if (!metricas["cpu_load_1m"].isNull()) target_host->cpu_load = metricas["cpu_load_1m"].as<float>();
 
         if (metricas["memoria"].is<JsonObject>()) {
-            JsonObject memoria = metricas["memoria"];
-            if (!memoria["percentual"].isNull()) target_host->ram_pct = memoria["percentual"].as<int>();
-            if (!memoria["total_mb"].isNull()) target_host->ram_total_mb = memoria["total_mb"].as<int>();
-            if (!memoria["usada_mb"].isNull()) target_host->ram_used_mb = memoria["usada_mb"].as<int>();
+            JsonObject mem = metricas["memoria"];
+            if (!mem["total_bytes"].isNull()) target_host->ram_total_bytes = mem["total_bytes"].as<uint64_t>();
+            else if (!mem["total_kb"].isNull()) target_host->ram_total_bytes = mem["total_kb"].as<uint64_t>() * 1024ULL;
+            else if (!mem["total_mb"].isNull()) target_host->ram_total_bytes = mem["total_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
+
+            if (!mem["usada_bytes"].isNull()) target_host->ram_used_bytes = mem["usada_bytes"].as<uint64_t>();
+            else if (!mem["usada_kb"].isNull()) target_host->ram_used_bytes = mem["usada_kb"].as<uint64_t>() * 1024ULL;
+            else if (!mem["usada_mb"].isNull()) target_host->ram_used_bytes = mem["usada_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
         }
 
         if (metricas["disco"].is<JsonObject>()) {
-            JsonObject disco = metricas["disco"];
-            if (!disco["uso_percentual"].isNull()) target_host->disk_pct = disco["uso_percentual"].as<int>();
-            if (!disco["total_gb"].isNull()) target_host->disk_total_gb = disco["total_gb"].as<float>();
-            if (!disco["usado_gb"].isNull()) target_host->disk_used_gb = disco["usado_gb"].as<float>();
+            JsonObject dsk = metricas["disco"];
+            if (!dsk["total_bytes"].isNull()) target_host->disk_total_bytes = dsk["total_bytes"].as<uint64_t>();
+            else if (!dsk["total_kb"].isNull()) target_host->disk_total_bytes = dsk["total_kb"].as<uint64_t>() * 1024ULL;
+            else if (!dsk["total_mb"].isNull()) target_host->disk_total_bytes = dsk["total_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
+
+            if (!dsk["usado_bytes"].isNull()) target_host->disk_used_bytes = dsk["usado_bytes"].as<uint64_t>();
+            else if (!dsk["usado_kb"].isNull()) target_host->disk_used_bytes = dsk["usado_kb"].as<uint64_t>() * 1024ULL;
+            else if (!dsk["usado_mb"].isNull()) target_host->disk_used_bytes = dsk["usado_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
         }
     } else {
         if (!doc["temp"].isNull()) target_host->temp = doc["temp"].as<float>();
         if (!doc["cpu_load"].isNull()) target_host->cpu_load = doc["cpu_load"].as<float>();
-        if (!doc["ram_pct"].isNull()) target_host->ram_pct = doc["ram_pct"].as<int>();
-        if (!doc["ram_total_mb"].isNull()) target_host->ram_total_mb = doc["ram_total_mb"].as<int>();
-        if (!doc["ram_used_mb"].isNull()) target_host->ram_used_mb = doc["ram_used_mb"].as<int>();
-        if (!doc["disk_pct"].isNull()) target_host->disk_pct = doc["disk_pct"].as<int>();
-        if (!doc["disk_total_gb"].isNull()) target_host->disk_total_gb = doc["disk_total_gb"].as<float>();
-        if (!doc["disk_used_gb"].isNull()) target_host->disk_used_gb = doc["disk_used_gb"].as<float>();
+
+        if (!doc["ram_total_bytes"].isNull()) target_host->ram_total_bytes = doc["ram_total_bytes"].as<uint64_t>();
+        else if (!doc["ram_total_kb"].isNull()) target_host->ram_total_bytes = doc["ram_total_kb"].as<uint64_t>() * 1024ULL;
+        
+        if (!doc["ram_used_bytes"].isNull()) target_host->ram_used_bytes = doc["ram_used_bytes"].as<uint64_t>();
+        else if (!doc["ram_used_kb"].isNull()) target_host->ram_used_bytes = doc["ram_used_kb"].as<uint64_t>() * 1024ULL;
+
+        if (!doc["disk_total_bytes"].isNull()) target_host->disk_total_bytes = doc["disk_total_bytes"].as<uint64_t>();
+        else if (!doc["disk_total_kb"].isNull()) target_host->disk_total_bytes = doc["disk_total_kb"].as<uint64_t>() * 1024ULL;
+
+        if (!doc["disk_used_bytes"].isNull()) target_host->disk_used_bytes = doc["disk_used_bytes"].as<uint64_t>();
+        else if (!doc["disk_used_kb"].isNull()) target_host->disk_used_bytes = doc["disk_used_kb"].as<uint64_t>() * 1024ULL;
     }
 
     target_host->online = true;
@@ -265,14 +253,6 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     if (g_telemetry_list.size() == 1) {
         g_telemetry = *target_host;
         g_telemetry.updated = true;
-    } else {
-        if (g_current_display_index < g_telemetry_list.size() &&
-            strcmp(g_telemetry_list[g_current_display_index].id, target_host->id) == 0) {
-            g_telemetry = *target_host;
-            g_telemetry.updated = true;
-        } else {
-            if (ws.count() > 0) ws.textAll(build_json_string());
-        }
     }
 
     return true;
@@ -280,7 +260,7 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
 
 inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client, 
                         AwsEventType type, void *arg, uint8_t *data, size_t len) {
-    if (!webserverState) return;
+    if (!g_webserver_state) return;
 
     if (type == WS_EVT_CONNECT) {
         client->text(build_json_string());
@@ -292,10 +272,8 @@ inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client
     }
 }
 
-// Handler para o POST /api/telemetry
 inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    // Bloqueia e envia o 503 apenas no primeiro chunk (index == 0)
-    if (!webserverState) {
+    if (!g_webserver_state) {
         if (index == 0) {
             request->send(503, "application/json", "{\"status\":\"paused\",\"message\":\"Serviço suspenso via painel\"}");
         }
@@ -312,7 +290,6 @@ inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data,
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
 }
 
-// Handler para salvar as configurações enviadas da página web (/config)
 inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (index + len < total) return;
 
@@ -326,31 +303,77 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
 
     if (!doc["webserver"].isNull()) {
         bool newState = doc["webserver"].as<bool>();
-        if (webserverState != newState) {
-            webserverState = newState;
-            if (!webserverState) {
-                ws.closeAll(); // Encerra WebSockets ativos se o serviço for pausado
+        if (g_webserver_state != newState) {
+            g_webserver_state = newState;
+            if (!g_webserver_state) {
+                ws.closeAll();
             }
         }
     }
 
-    // Atualiza diretamente na instância hours_Time_exec
-    if (doc["wake_time"].is<const char*>()) hours_Time_exec.setHoursWakeon(doc["wake_time"].as<String>());
-
-    if (doc["sleep_time"].is<const char*>()) hours_Time_exec.setHoursSleep(doc["sleep_time"].as<String>());
+    if (doc["wake_time"].is<const char*>()) g_wake_up_time = doc["wake_time"].as<String>();
+    if (doc["sleep_time"].is<const char*>()) g_sleep_time = doc["sleep_time"].as<String>();
 
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
 }
 
+inline void setup_web_server() {
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+    ws.onEvent(on_ws_event);
+    server.addHandler(&ws);
+
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Dashboard Server Online");
+    });
+
+    server.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!g_webserver_state) {
+            request->send(503, "text/html", 
+                "<html><head><meta charset='UTF-8'></head><body style='background:#0a0413;color:#fff;font-family:sans-serif;text-align:center;padding-top:100px;'>"
+                "<h1>Serviço em Pausa</h1>"
+                "<p>A telemetria do dashboard está temporariamente desativada.</p>"
+                "<a href='/config' style='color:#00f2fe;'>Acessar Painel de Configurações</a>"
+                "</body></html>"
+            );
+            return;
+        }
+        request->send(200, "text/html", index_html);
+    });
+      // NOVO: Rota para Data e Hora Dinâmicas (JSON)
+    server.on("/datetime", HTTP_GET, handleDateTime); 
+
+    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", config_html, processor);
+    });
+
+    server.on("/autodiscovery", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+    server.on("/autodiscovery", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (!g_webserver_state) {
+            request->send(503, "application/json", "{\"status\":\"paused\",\"message\":\"Serviço suspenso\"}");
+            return;
+        }
+        request->send(200, "application/json", "{\"status\":\"ok\"}");
+    });
+
+    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+    server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+
+    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, handle_post_telemetry);
+    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, handle_post_config);
+
+    server.begin();
+    Serial.println("Servidor HTTP Async Iniciado!");
+}
+
 inline void process_web_server_tasks() {
-    // Se o serviço estiver desligado pelo switch, congela os loops pesados
-    if (!webserverState) return;
+    if (!g_webserver_state) return;
 
     ws.cleanupClients();
-
     uint32_t now = millis();
 
-    // Verificação de expiração de hosts
     if (!g_telemetry_list.empty()) {
         uint32_t timeout_threshold_ms = DISPLAY_ROTATION_INTERVAL_MS * 2 * g_telemetry_list.size();
         bool list_changed = false;
@@ -379,7 +402,6 @@ inline void process_web_server_tasks() {
         }
     }
 
-    // Rotação do carrossel do display
     if (!g_telemetry_list.empty()) {
         if (now - g_last_host_switch_ms >= DISPLAY_ROTATION_INTERVAL_MS) {
             g_last_host_switch_ms = now;
@@ -393,61 +415,6 @@ inline void process_web_server_tasks() {
         g_telemetry.updated = false;
         update_display_and_ws();
     }
-}
-
-inline void setup_web_server() {
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-
-    ws.onEvent(on_ws_event);
-    server.addHandler(&ws);
-
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/plain", "Dashboard Server Online");
-    });
-
-    server.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
-        if (!webserverState) {
-            request->send(503, "text/html", 
-                "<html><head><meta charset='UTF-8'></head><body style='background:#0a0413;color:#fff;font-family:sans-serif;text-align:center;padding-top:100px;'>"
-                "<h1>Serviço em Pausa</h1>"
-                "<p>A telemetria do dashboard está temporariamente desativada.</p>"
-                "<a href='/config' style='color:#00f2fe;'>Acessar Painel de Configurações</a>"
-                "</body></html>"
-            );
-            return;
-        }
-        request->send(200, "text/html", index_html);
-    });
-    // NOVO: Rota para Data e Hora Dinâmicas (JSON)
-    server.on("/datetime", HTTP_GET, handleDateTime); 
-    
-    server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
-        request->send(200, "text/html", config_html, processor);
-    });
-
-    // CORS Options Pre-flight
-    server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
-    server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
-
-    // API Rota Telemetria
-    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-        handle_post_telemetry
-    );
-
-    // API Rota Configurações
-    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, 
-        handle_post_config
-    );
-
-    // Endpoint de Autodiscovery
-    server.on("/api/autodiscovery", HTTP_POST, [](AsyncWebServerRequest *request) {
-        request->send(200, "application/json", "{\"status\":\"ok\"}");
-    });
-
-    server.begin();
-    Serial.println("Servidor HTTP Async Iniciado!");
 }
 
 #endif // SERVIDORWEB_H

@@ -6,42 +6,59 @@
   inline String MODELO_VALUE() { return String("ESP8266 ESP-01"); }
 #elif defined(ESP32)
   inline String MODELO_VALUE() { return String(ESP.getChipModel()); }
+#else
+  inline String MODELO_VALUE() { return String("Desconhecido"); }
 #endif
 
 PhysicalAccessControl::PhysicalAccessControl() {}
 
 String PhysicalAccessControl::modelBoardESP() { return MODELO_VALUE(); }
 
-String PhysicalAccessControl::total_ram() { 
+// Memória RAM Livre em KB
+uint32_t PhysicalAccessControl::free_ram_kb() { 
+    return ESP.getFreeHeap() / 1024; 
+}
+
+// Memória RAM Total em KB
+uint32_t PhysicalAccessControl::total_ram_kb() { 
   #if defined(ESP8266)
-    // No ESP8266 usamos a soma para estimar a RAM total livre
-    return String((ESP.getFreeHeap() + 32000) / 1024) + " KB"; 
+    return 80; // O ESP8266 possui aproximadamente 80KB de RAM total para o usuário
+  #elif defined(ESP32)
+    return ESP.getHeapSize() / 1024; 
   #else
-    // No ESP32 existe função nativa para o tamanho total do Heap
-    return String(ESP.getHeapSize() / 1024) + " KB"; 
+    return 0;
   #endif
 }
 
-String PhysicalAccessControl::flash_size() { 
+// Tamanho da Memória Flash em MB
+uint32_t PhysicalAccessControl::flash_size_mb() { 
   #if defined(ESP8266)
-    return String(ESP.getFlashChipRealSize() / (1024 * 1024)) + " MB";
+    return ESP.getFlashChipRealSize() / (1024 * 1024);
+  #elif defined(ESP32)
+    return ESP.getFlashChipSize() / (1024 * 1024);
   #else
-    return String(ESP.getFlashChipSize() / (1024 * 1024)) + " MB";
+    return 0;
   #endif
 }
 
-String PhysicalAccessControl::menor_ram_size() { 
-  return String((unsigned long)ESP.getFreeHeap() / 1024) + " KB"; 
+// Menor nível de RAM livre registrado desde o boot (Watermark) em KB
+uint32_t PhysicalAccessControl::min_free_ram_kb() { 
+  #if defined(ESP32)
+    return ESP.getMinFreeHeap() / 1024;
+  #else
+    return ESP.getFreeHeap() / 1024;
+  #endif
 }
 
-String PhysicalAccessControl::sketch_Size() { 
-  return String((unsigned long)ESP.getSketchSize() / 1024) + " KB"; 
+// Tamanho do Firmware (Sketch) compilado em KB
+uint32_t PhysicalAccessControl::sketch_size_kb() { 
+    return ESP.getSketchSize() / 1024; 
 }
 
 // Retorna um JSON dinâmico com quantos GPIOs cada placa tiver
 String PhysicalAccessControl::pinGPIO() {
   JsonDocument doc;
-  JsonObject gpios = doc.createNestedObject("gpios");
+  JsonObject gpios = doc["gpios"].to<JsonObject>();
 
   #if defined(ESP8266)
     // Configuração para módulos menores ou NodeMCU

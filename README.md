@@ -246,9 +246,10 @@ get_uptime_formatted() {
 }
 
 get_memory_metrics() {
-    local total_mb=0 used_mb=0 pct=0.00
+    # Coleta valores brutos em Bytes diretamente do /proc/meminfo para o Front-end converter
+    local total_bytes=0 available_bytes=0 used_bytes=0
     if [[ -f /proc/meminfo ]]; then
-        local mem_total_kb mem_avail_kb mem_used_kb
+        local mem_total_kb mem_avail_kb
         mem_total_kb=$(awk '/MemTotal:/ {print $2}' /proc/meminfo || echo "0")
         mem_avail_kb=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo || echo "")
 
@@ -260,39 +261,20 @@ get_memory_metrics() {
             mem_avail_kb=$(( ${mem_free_kb:-0} + ${mem_buffers_kb:-0} + ${mem_cached_kb:-0} ))
         fi
 
-        if [[ -n "$mem_total_kb" && "$mem_total_kb" -gt 0 ]]; then
-            mem_used_kb=$(( mem_total_kb - mem_avail_kb ))
-            total_mb=$(( mem_total_kb / 1024 ))
-            used_mb=$(( mem_used_kb / 1024 ))
-            pct=$(awk -v u="$mem_used_kb" -v t="$mem_total_kb" 'BEGIN { if (t>0) printf "%.2f", (u/t)*100; else print "0.00" }')
-            echo "$total_mb $used_mb $pct"
-            return
-        fi
+        total_bytes=$(( mem_total_kb * 1024 ))
+        available_bytes=$(( mem_avail_kb * 1024 ))
+        used_bytes=$(( total_bytes - available_bytes ))
     fi
-
-    local total used
-    read -r total used < <(free -m 2>/dev/null | awk '/Mem:|Memória:/ {print $2, $3}')
-    total="${total:-0}"
-    used="${used:-0}"
-    pct=$(awk -v u="$used" -v t="$total" 'BEGIN { if (t>0) printf "%.2f", (u/t)*100; else print "0.00" }')
-    echo "$total $used $pct"
+    echo "$total_bytes $used_bytes $available_bytes"
 }
 
 get_disk_metrics() {
-    local total_gb=0.0 used_gb=0.0 pct=0
-    if df_out=$(df -Pk / 2>/dev/null | awk 'END {print $2, $3, $5}'); then
-        read -r total_kb used_kb pct_str <<< "$df_out"
-        total_gb=$(awk -v t="${total_kb:-0}" 'BEGIN {printf "%.1f", t/1048576}')
-        used_gb=$(awk -v u="${used_kb:-0}" 'BEGIN {printf "%.1f", u/1048576}')
-        pct="${pct_str%%%}"
+    # Coleta valores brutos em Bytes do sistema de arquivos para o Front-end manipular
+    local total_bytes=0 used_bytes=0 free_bytes=0
+    if df_out=$(df -B1 / 2>/dev/null | awk 'END {print $2, $3, $4}'); then
+        read -r total_bytes used_bytes free_bytes <<< "$df_out"
     fi
-    echo "$total_gb $used_gb $pct"
-}
-
-get_disk_free() {
-    local free_str
-    free_str=$(df -h / | awk 'END {print $4}')
-    echo "${free_str:-0B}"
+    echo "${total_bytes:-0} ${used_bytes:-0} ${free_bytes:-0}"
 }
 
 # ------------------------------------------------------------------------------
@@ -336,10 +318,10 @@ auto_discovery_esp32() {
 }
 
 # ------------------------------------------------------------------------------
-# Montagem do Payload no novo formato JSON
+# Montagem do Payload no novo formato JSON com Dados Brutos
 # ------------------------------------------------------------------------------
 build_telemetry_payload() {
-    local id ip mac host uptime timestamp os_name os_logo kernel arch cpu_temp cpu_load mem_total_mb mem_used_mb mem_pct disk_total_gb disk_used_gb disk_pct disk_free os_info datetime epoch_timestamp
+    local id ip mac host uptime timestamp os_name os_logo kernel arch cpu_temp cpu_load mem_total_bytes mem_used_bytes mem_free_bytes disk_total_bytes disk_used_bytes disk_free_bytes os_info datetime epoch_timestamp
 
     mac=$(get_mac)
     ip=$(get_ip)
@@ -360,18 +342,17 @@ build_telemetry_payload() {
     cpu_temp=$(get_cpu_temp)
     cpu_load=$(get_cpu_load)
 
-    read -r mem_total_mb mem_used_mb mem_pct <<< "$(get_memory_metrics)"
-    read -r disk_total_gb disk_used_gb disk_pct <<< "$(get_disk_metrics)"
-    disk_free=$(get_disk_free)
+    read -r mem_total_bytes mem_used_bytes mem_free_bytes <<< "$(get_memory_metrics)"
+    read -r disk_total_bytes disk_used_bytes disk_free_bytes <<< "$(get_disk_metrics)"
 
     cpu_temp="${cpu_temp:-0.0}"
     cpu_load="${cpu_load:-0.0}"
-    mem_total_mb="${mem_total_mb:-0}"
-    mem_used_mb="${mem_used_mb:-0}"
-    mem_pct="${mem_pct:-0.00}"
-    disk_total_gb="${disk_total_gb:-0.0}"
-    disk_used_gb="${disk_used_gb:-0.0}"
-    disk_pct="${disk_pct:-0}"
+    mem_total_bytes="${mem_total_bytes:-0}"
+    mem_used_bytes="${mem_used_bytes:-0}"
+    mem_free_bytes="${mem_free_bytes:-0}"
+    disk_total_bytes="${disk_total_bytes:-0}"
+    disk_used_bytes="${disk_used_bytes:-0}"
+    disk_free_bytes="${disk_free_bytes:-0}"
 
     cat <<EOF
 {
@@ -393,15 +374,14 @@ build_telemetry_payload() {
     "cpu_temp": $cpu_temp,
     "cpu_load_1m": $cpu_load,
     "memoria": {
-      "total_mb": $mem_total_mb,
-      "usada_mb": $mem_used_mb,
-      "percentual": $mem_pct
+      "total_bytes": $mem_total_bytes,
+      "usada_bytes": $mem_used_bytes,
+      "livre_bytes": $mem_free_bytes
     },
     "disco": {
-      "total_gb": $disk_total_gb,
-      "usado_gb": $disk_used_gb,
-      "uso_percentual": $disk_pct,
-      "espaco_livre": "$disk_free"
+      "total_bytes": $disk_total_bytes,
+      "usado_bytes": $disk_used_bytes,
+      "livre_bytes": $disk_free_bytes
     }
   }
 }

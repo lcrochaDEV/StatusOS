@@ -6,12 +6,19 @@
 class PhysicalAccessControl {
   public:
     PhysicalAccessControl();
-      String modelBoardESP();
-      String total_ram();
-      String flash_size();
-      String menor_ram_size();
-      String sketch_Size();
-      String pinGPIO();
+    
+    // Métodos de Informação do Sistema
+    String modelBoardESP();
+    
+    // Métodos de Memória (Retornam valores numéricos em KB/MB para facilitar cálculos)
+    uint32_t free_ram_kb();
+    uint32_t total_ram_kb();
+    uint32_t flash_size_mb();
+    uint32_t min_free_ram_kb();
+    uint32_t sketch_size_kb();
+    
+    // Mapeamento de GPIOs em JSON
+    String pinGPIO();
 };
 
-#endif
+#endif // PHYSICALACCESSCONTROL_H

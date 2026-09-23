@@ -2,7 +2,7 @@
 #define INDEX_HTML_H
 
 // HTML armazenado na Flash
-static const char index_html[] = R"rawliteral(
+static const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR" data-theme="dark">
 <head>
@@ -26,11 +26,103 @@ static const char index_html[] = R"rawliteral(
       --accent-yellow: #ffcc00;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background: var(--bg-main); color: var(--text-primary); display: flex; min-height: 100vh; overflow-x: hidden; }
+    
+    /* Layout principal alinhado em linha (Sidebar + Main) */
+    body { 
+      background: var(--bg-main); 
+      color: var(--text-primary); 
+      display: flex; 
+      min-height: 100vh; 
+      overflow-x: hidden; 
+    }
 
-    .main-wrapper { flex: 1; display: flex; flex-direction: column; }
-    .topbar { height: 60px; background: var(--bg-sidebar); border-bottom: 1px solid var(--border-card); display: flex; align-items: center; justify-content: space-between; padding: 0 25px; }
-    .brand { font-size: 20px; font-weight: bold; color: var(--accent-cyan); display: flex; align-items: center; gap: 10px; }
+    /* Checkbox oculto de controle do menu */
+    #menu-toggle {
+        display: none;
+    }
+
+    /* Estilização do Menu Lateral integrado ao fluxo da página */
+    .sidebar {
+        width: 250px;
+        min-width: 250px;
+        height: 100vh;
+        background-color: var(--bg-sidebar);
+        color: var(--text-primary);
+        position: sticky;
+        top: 0;
+        transition: all 0.3s ease;
+        overflow-x: hidden;
+        border-right: 1px solid var(--border-card);
+        display: flex;
+        flex-direction: column;
+        z-index: 10;
+    }
+
+    /* Cabeçalho do Menu Lateral */
+    .sidebar .brand {
+        height: 60px;
+        padding: 0 20px;
+        font-size: 1.25rem;
+        font-weight: bold;
+        background-color: var(--bg-card);
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        border-bottom: 1px solid var(--border-card);
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .sidebar .brand span {
+        font-size: 1.5rem;
+        color: var(--accent-cyan);
+        transition: color 0.3s ease;
+    }
+
+    .sidebar .brand span:hover {
+        color: var(--accent-magenta);
+    }
+
+    /* Links do Menu */
+    .nav-links {
+        list-style: none;
+        padding: 20px 0;
+    }
+
+    .nav-links li a {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 15px 20px;
+        color: var(--text-muted);
+        text-decoration: none;
+        transition: all 0.3s ease;
+        white-space: nowrap;
+    }
+
+    .nav-links li a:hover {
+        background-color: var(--border-card);
+        color: var(--accent-cyan);
+    }
+
+    /* Wrapper do conteúdo principal que se ajusta lado a lado */
+    .main-wrapper { 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column; 
+      min-width: 0; 
+    }
+
+    .topbar { 
+      height: 60px; 
+      background: var(--bg-sidebar); 
+      border-bottom: 1px solid var(--border-card); 
+      display: flex; 
+      align-items: center; 
+      justify-content: flex-end; 
+      padding: 0 25px; 
+    }
+
     .topbar-right { display: flex; align-items: center; gap: 15px; }
     .conteiner_right .icon {
         color: #cf0844;
@@ -140,12 +232,51 @@ static const char index_html[] = R"rawliteral(
       border-bottom: none;
       padding-bottom: 0;
     }
+
+    /* Regra de Recolhimento do Menu */
+    #menu-toggle:checked ~ .sidebar {
+        width: 65px;
+        min-width: 65px;
+    }
+
+    #menu-toggle:checked ~ .sidebar .brand {
+        justify-content: center;
+        padding: 0;
+    }
+    
+    #menu-toggle:checked ~ .sidebar .brand text {
+        display: none;
+    }
+
+    #menu-toggle:checked ~ .sidebar .nav-links span {
+        display: none;
+    }
+
+    #menu-toggle:checked ~ .sidebar .nav-links li a {
+        justify-content: center;
+        padding: 15px 0;
+    }
   </style>
 </head>
 <body>
+  <!-- Checkbox oculto com 'checked' para iniciar o menu fechado -->
+  <input type="checkbox" id="menu-toggle" checked>
+
+  <!-- Menu Lateral Enquadrado na Lateral -->
+  <div class="sidebar">
+      <label for="menu-toggle" class="brand">
+          <span>≡</span>
+          <text>Dashboard</text>
+      </label>
+      
+      <ul class="nav-links">
+          <li><a href="/dashboard">📊 <span>Dashboard</span></a></li>
+          <li><a href="/config">⚙️ <span>Configurações</span></a></li>
+      </ul>
+  </div>
+
   <div class="main-wrapper">
     <header class="topbar">
-      <div class="brand"><span>≡</span> Dashboard</div>
       <div class="topbar-right">
         <select id="hostSelect" class="select-host" onchange="updateHostVisibility()">
           <option value="ALL">Todos os Hosts</option>
@@ -196,20 +327,20 @@ static const char index_html[] = R"rawliteral(
       chart.update();
     }
 
-    function formatDynamicBytes(value, inputUnit = 'MB') {
-      if (value === undefined || value === null || value <= 0) return '--';
-      let bytes = value;
-      if (inputUnit === 'MB') bytes = value * 1024 * 1024;
-      else if (inputUnit === 'GB') bytes = value * 1024 * 1024 * 1024;
-      else if (inputUnit === 'KB') bytes = value * 1024;
+    // FORMATAÇÃO DINÂMICA DE BYTES PARA QUALQUER ESCALA (B, KB, MB, GB, TB, PB)
+    function formatDynamicBytes(valueInBytes) {
+      if (valueInBytes === undefined || valueInBytes === null || isNaN(valueInBytes) || valueInBytes < 0) return '--';
+      if (valueInBytes === 0) return '0 B';
 
-      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let bytes = Number(valueInBytes);
+      const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
       let i = 0;
+
       while (bytes >= 1024 && i < units.length - 1) {
         bytes /= 1024;
         i++;
       }
-      return `${bytes.toFixed(bytes % 1 === 0 ? 0 : 1)} ${units[i]}`;
+      return `${Math.round(bytes)} ${units[i]}`;
     }
 
     function addOptionToSelect(hostName) {
@@ -360,20 +491,42 @@ static const char index_html[] = R"rawliteral(
                     (data.metricas ? data.metricas.cpu_load_1m : 0);
       const cpuVal = Math.min(Math.round((rawCpu * 100) / 4), 100);
 
-      // RAM
-      const ramVal = data.ram_pct !== undefined ? Math.round(data.ram_pct) : 
-                    (data.metricas && data.metricas.memoria ? Math.round(data.metricas.memoria.percentual) : 0);
-                    
-      // Disco
-      const diskVal = data.disk_pct !== undefined ? Math.round(data.disk_pct) : 
-                    (data.metricas && data.metricas.disco ? Math.round(data.metricas.disco.uso_percentual) : 0);
+      // --- EXTRAÇÃO ROBUSTA DE DADOS EM BYTES (RAM) ---
+      let ramTotalBytes = Number(data.ram_total_bytes ?? data.metricas?.memoria?.total_bytes ?? 0);
+      let ramUsedBytes  = Number(data.ram_used_bytes ?? data.metricas?.memoria?.usada_bytes ?? 0);
 
-      // Temperatura
+      if (!ramTotalBytes) {
+        const kbTotal = data.ram_total_kb || data.metricas?.memoria?.total_kb;
+        if (kbTotal) {
+          ramTotalBytes = Number(kbTotal) * 1024;
+          ramUsedBytes = Number(data.ram_used_kb || data.metricas?.memoria?.usada_kb || 0) * 1024;
+        }
+      }
+
+      const ramVal = data.ram_pct !== undefined ? Math.round(data.ram_pct) :
+                     (ramTotalBytes > 0 ? Math.min(100, Math.round((ramUsedBytes / ramTotalBytes) * 100)) : 0);
+
+      // --- EXTRAÇÃO ROBUSTA DE DADOS EM BYTES (DISCO) ---
+      let diskTotalBytes = Number(data.disk_total_bytes ?? data.metricas?.disco?.total_bytes ?? 0);
+      let diskUsedBytes  = Number(data.disk_used_bytes ?? data.metricas?.disco?.usado_bytes ?? 0);
+
+      if (!diskTotalBytes) {
+        const kbTotal = data.disk_total_kb || data.metricas?.disco?.total_kb;
+        if (kbTotal) {
+          diskTotalBytes = Number(kbTotal) * 1024;
+          diskUsedBytes = Number(data.disk_used_kb || data.metricas?.disco?.usado_kb || 0) * 1024;
+        }
+      }
+
+      const diskVal = data.disk_pct !== undefined ? Math.round(data.disk_pct) :
+                      (diskTotalBytes > 0 ? Math.min(100, Math.round((diskUsedBytes / diskTotalBytes) * 100)) : 0);
+
+      // TEMPERATURA
       const rawTemp = data.temp !== undefined ? data.temp : 
                      (data.metricas && data.metricas.cpu_temp !== undefined ? data.metricas.cpu_temp : 0);
       const tempVal = typeof rawTemp === 'number' ? Math.round(rawTemp) : 0;
 
-      // Gauges
+      // ATUALIZAÇÃO DAS GAUGES
       const elCpu = document.getElementById(`cpu-value-${safeKey}`);
       const elRam = document.getElementById(`ram-value-${safeKey}`);
       const elDisk = document.getElementById(`disk-value-${safeKey}`);
@@ -392,7 +545,7 @@ static const char index_html[] = R"rawliteral(
         updateGauge(charts.tempGauge, Math.min(tempVal, 100));
       }
 
-      // Sistema Operacional & Logo Background
+      // SISTEMA OPERACIONAL & LOGO
       const osName = data.os_name || (data.sistema_operacional ? data.sistema_operacional.nome : '--');
       const osKernel = data.kernel || (data.sistema_operacional ? data.sistema_operacional.kernel : '--');
       const logoUrl = data.logo_url || (data.sistema_operacional ? data.sistema_operacional.logo_url : '');
@@ -413,7 +566,7 @@ static const char index_html[] = R"rawliteral(
         }
       }
 
-      // Barras de Progresso e Sub-Textos
+      // SUB-TEXTOS E METRICAS FORMATADAS
       const host = data.server || data.host || '--';
       const uptime = data.uptime || '--';
       const datetime = data.datetime || data.timestamp || '--';
@@ -435,16 +588,11 @@ static const char index_html[] = R"rawliteral(
       if (elRamBar) elRamBar.style.width = ramVal + '%';
       if (elDiskBar) elDiskBar.style.width = diskVal + '%';
 
-      if (elRamSub) elRamSub.textContent = ramVal + '%';
-      if (elDiskSub) elDiskSub.textContent = diskVal + '%';
+      if (elRamSub) elRamSub.textContent = `${ramVal}% (${formatDynamicBytes(ramUsedBytes)} usados)`;
+      if (elDiskSub) elDiskSub.textContent = `${diskVal}% (${formatDynamicBytes(Math.max(0, diskTotalBytes - diskUsedBytes))} livre)`;
 
-      const ramTotalMb = data.ram_total_mb !== undefined ? data.ram_total_mb :
-                         (data.metricas && data.metricas.memoria && data.metricas.memoria.total_mb ? data.metricas.memoria.total_mb : 0);
-      if (elRamTotalLabel) elRamTotalLabel.textContent = 'Total: ' + formatDynamicBytes(ramTotalMb, 'MB');
-
-      const diskTotalGb = data.disk_total_gb !== undefined ? data.disk_total_gb : 
-                          (data.metricas && data.metricas.disco && data.metricas.disco.total_gb !== undefined ? data.metricas.disco.total_gb : 0);
-      if (elDiskTotalLabel) elDiskTotalLabel.textContent = 'Total: ' + formatDynamicBytes(diskTotalGb, 'GB');
+      if (elRamTotalLabel) elRamTotalLabel.textContent = 'Total: ' + formatDynamicBytes(ramTotalBytes);
+      if (elDiskTotalLabel) elDiskTotalLabel.textContent = 'Total: ' + formatDynamicBytes(diskTotalBytes);
 
       if (elHost) elHost.textContent = 'Host: ' + host + ' | IP: ' + ip + ' | MAC: ' + mac;
       if (elDatetime) elDatetime.textContent = 'Data: ' + datetime;
@@ -456,23 +604,19 @@ static const char index_html[] = R"rawliteral(
 
     function atualizarDashboard(data) {
       if (Array.isArray(data)) {
-        // 1. Mapeia os nomes/IDs de todos os hosts presentes no JSON atual
         const hostsNoJson = new Set(
           data.map(item => item.server || item.host || item.id || 'Desconhecido')
         );
 
-        // 2. Remove os cards dos hosts que não estão mais no JSON
         Object.keys(hostsMap).forEach(hostName => {
           if (!hostsNoJson.has(hostName)) {
             const safeKey = getSafeKey(hostName);
             const el = document.getElementById(`host-section-${safeKey}`);
-            if (el) el.remove(); // Remove o card do DOM
+            if (el) el.remove();
 
-            // Limpa o registro das variáveis globais
             delete hostsMap[hostName];
             delete gaugeCharts[safeKey];
 
-            // Opcional: remove a opção do <select>
             const select = document.getElementById('hostSelect');
             Array.from(select.options).forEach(opt => {
               if (opt.value === hostName) opt.remove();
@@ -480,7 +624,6 @@ static const char index_html[] = R"rawliteral(
           }
         });
 
-        // 3. Atualiza ou cria os hosts ativos
         data.forEach(item => atualizarDashboardItem(item));
       } else if (data) {
         atualizarDashboardItem(data);
@@ -557,4 +700,4 @@ static const char index_html[] = R"rawliteral(
 </html>
 )rawliteral";
 
-#endif
+#endif // INDEX_HTML_H
