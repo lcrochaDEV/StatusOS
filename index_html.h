@@ -269,10 +269,10 @@ static const char index_html[] PROGMEM = R"rawliteral(
           <text>Dashboard</text>
       </label>
       
-      <ul class="nav-links">
-          <li><a href="/dashboard"><span class="material-symbols-outlined">dashboard</span> <span>Dashboard</span></a></li>
-          <li><a href="/config"><span class="material-symbols-outlined">settings</span> <span>Configurações</span></a></li>
-      </ul>
+        <ul class="nav-links">
+          <li><a href="/dashboard"><i class="material-symbols-outlined">dashboard</i> <span>Dashboard</span></a></li>
+          <li><a href="/config"><i class="material-symbols-outlined">settings</i> <span>Configurações</span></a></li>
+        </ul>
   </div>
 
   <div class="main-wrapper">

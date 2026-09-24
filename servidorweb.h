@@ -349,8 +349,8 @@ inline void setup_web_server() {
         request->send(200, "text/html", config_html, processor);
     });
 
-    server.on("/autodiscovery", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
-    server.on("/autodiscovery", HTTP_POST, [](AsyncWebServerRequest *request) {
+    server.on("/api/autodiscovery", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
+    server.on("/api/autodiscovery", HTTP_POST, [](AsyncWebServerRequest *request) {
         if (!g_webserver_state) {
             request->send(503, "application/json", "{\"status\":\"paused\",\"message\":\"Serviço suspenso\"}");
             return;
