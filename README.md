@@ -1,6 +1,5 @@
 #### Ideias
-1. Colocar as % dentro do circuilo no dashbord.
-2. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
+1. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
 
 
 # Telemetria & Monitoramento de Servidores (ESP32 + Linux Bash)
