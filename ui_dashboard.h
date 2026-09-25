@@ -242,8 +242,11 @@ public:
     void set_online_status(bool online) {
         lv_color_t border_color = online ? COLOR_BORDER_ACTIVE : COLOR_BORDER_IDLE;
         
-        // 💡 Mantém a cor do background forte (LV_OPA_COVER) quando online, e mais opaco quando offline
-        lv_opa_t card_opa = online ? LV_OPA_COVER : LV_OPA_40;
+        // 💡 ALTERE AQUI PARA DEIXAR O FUNDO MAIS FORTE:
+        // LV_OPA_COVER = 100% forte (cor pura do card)
+        // LV_OPA_80    = 80% forte (muito visível)
+        // LV_OPA_90    = 90% forte
+        lv_opa_t card_opa = online ? LV_OPA_80 : LV_OPA_40;
 
         lv_obj_t* cards[] = {card_cpu, card_ram, card_disk, card_temp, card_os};
         for (lv_obj_t* card : cards) {

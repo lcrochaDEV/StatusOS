@@ -16,6 +16,8 @@ readonly DEFAULT_TIMEOUT=5
 readonly DEFAULT_LOGO="https://cdn-icons-png.flaticon.com/512/518/518713.png" # Logo Padrão/Genérica
 readonly DEFAULT_LOGO_UBUNTU="https://assets.ubuntu.com/v1/29383635-ubuntu-logo-2022.png"
 readonly DEFAULT_LOGO_RASPBERRY="https://www.raspberrypi.com/app/uploads/2020/06/raspberrry_pi_logo.png"
+readonly DEFAULT_LOGO_WINDOWS="https://upload.wikimedia.org/wikipedia/commons/6/6d/Windows_Logo_%281992-2001%29.svg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original"
+readonly DEFAULT_LOGO_LINUX="https://upload.wikimedia.org/wikipedia/commons/d/d6/Linux_mascot_tux.png?utm_source=pt.wikipedia.org&utm_campaign=index&utm_content=original"
 readonly DEFAULT_SERVER_NAME="Server-RBP"
 
 SERVER_NAME="${SERVER_NAME:-$DEFAULT_SERVER_NAME}"
@@ -81,10 +83,20 @@ get_os_info() {
         name=$(uname -s)
     fi
 
-    if [[ "$name" =~ [Uu]buntu ]]; then
+    # Define a logo com base no sistema operacional identificado, 
+    # a menos que uma logo personalizada já tenha sido fornecida externamente.
+    if [[ -n "${OS_LOGO_URL:-}" ]]; then
+        logo="$OS_LOGO_URL"
+    elif [[ "$name" =~ [Uu]buntu ]]; then
         logo="$DEFAULT_LOGO_UBUNTU"
     elif [[ "$name" =~ [Rr]aspbian|[Rr]aspberry ]]; then
         logo="$DEFAULT_LOGO_RASPBERRY"
+    elif [[ "$name" =~ [Ww]indows ]]; then
+        logo="$DEFAULT_LOGO_WINDOWS"
+    elif [[ "$name" =~ [Ll]inux ]]; then
+        logo="$DEFAULT_LOGO_LINUX"
+    else
+        logo="$DEFAULT_LOGO"
     fi
 
     echo "$name|$logo"
