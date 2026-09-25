@@ -489,8 +489,10 @@ static const char config_html[] PROGMEM = R"rawliteral(
       </label>
       
       <ul class="nav-links">
-          <li><a href="/dashboard">📊 <span>Dashboard</span></a></li>
-          <li><a href="/config">⚙️ <span>Configurações</span></a></li>
+        <ul class="nav-links">
+          <li><a href="/dashboard"><i class="material-symbols-outlined">dashboard</i> <span>Dashboard</span></a></li>
+          <li><a href="/config"><i class="material-symbols-outlined">settings</i> <span>Configurações</span></a></li>
+        </ul>
       </ul>
   </div>
 

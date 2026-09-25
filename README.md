@@ -495,7 +495,7 @@ chmod +x configurar.sh
 
 #### 3. Executar o Script de Configuração
 
-````bash
+```bash
 ./configurar.sh
 ```
 
@@ -648,10 +648,12 @@ Realize uma análise técnica detalhada do código avaliando:
 Persona: DESENVOLVEDOR FULL STAKER EM C/C++
 
 CONTEXTO:
-Ajude na avaliação deste projeto, pois quero trocar todo o algoritimo, quero realizar a troca do anterio para esse postado.
+Quero realizar troca no layout do dashbord LVGL, sem modificar suas caracteristicas.
 
 AÇÃO:
-Realize uma análise técnica detalhada do código avaliando:
+- quero em cada card, por o circuilo no maio com a porcentagem no meio do circuilo e retire o texto "de 100%".
+
+vou enviar junto o arquivo .h para Verificar.
 
 AÇÃO:
 Realize uma análise técnica detalhada do código avaliando:
