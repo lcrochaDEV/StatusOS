@@ -203,8 +203,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
 
     .card { 
       background: var(--bg-card); 
-      border: 1px solid var(--border-card); 
-      border-radius: 10px; 
       padding: 14px 16px; 
       position: relative; 
       box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
@@ -233,7 +231,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
     .os-name { font-size: 22px; font-weight: bold; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
     .os-details { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--text-muted); }
 
-    /* GAUGES CIRCULARES - 4 COLUNAS FIXAS ENQUADRADAS NA MESMA LINHA */
+    /* GAUGES CIRCULARES - 4 COLUNAS FIXAS EM DESKTOP */
     .row-top { 
       display: grid; 
       grid-template-columns: repeat(4, minmax(0, 1fr)); 
@@ -280,6 +278,27 @@ static const char index_html[] PROGMEM = R"rawliteral(
       overflow: hidden;
       text-overflow: ellipsis;
       width: 100%;
+    }
+
+    /* TELAS PEQUENAS (SMARTPHONES <= 768PX): VOLTA AO PADRÃO ANTIGO DE 2 COLUNAS (2x2) NOS GAUGES */
+    @media (max-width: 768px) {
+      .content {
+        padding: 10px;
+      }
+      .row-top {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .gauge-container {
+        width: 80px;
+        height: 80px;
+      }
+      .gauge-value {
+        font-size: 13px;
+      }
+      .stat-label {
+        font-size: 10px;
+      }
     }
 
     /* MÉTRICAS EMPILHADAS */
