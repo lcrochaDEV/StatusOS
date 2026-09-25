@@ -157,21 +157,71 @@ static const char index_html[] PROGMEM = R"rawliteral(
       display: inline-block;
     }
 
-    .content { padding: 25px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; }
+    .content { padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
     .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
 
-    .card { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; padding: 18px; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+    /* LAYOUT PADRÃO (TELAS MENORES QUE 23" / < 1920PX): ESTRUTURA VERTICAL PADRÃO */
+    #dashboard-container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      width: 100%;
+    }
+
+    .host-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 8px;
+      border-bottom: 1px dashed var(--border-card);
+      box-sizing: border-box;
+      min-width: 0;
+    }
+
+    .host-section:last-child {
+      border-bottom: none;
+    }
+
+    /* TELAS GRANDES (23 POLEGADAS OU MAIS / >= 1920PX): CARDS LADO A LADO NA HORIZONTAL */
+    @media (min-width: 1920px) {
+      #dashboard-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(580px, 1fr));
+        gap: 20px;
+        align-items: start;
+      }
+
+      .host-section {
+        padding: 8px;
+        background: rgba(48, 38, 63, 0.45);
+        border: 1px solid var(--border-card);
+        border-radius: 19px;
+        box-shadow: 0 6px 25px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+    }
+
+    .card { 
+      background: var(--bg-card); 
+      border: 1px solid var(--border-card); 
+      border-radius: 10px; 
+      padding: 14px 16px; 
+      position: relative; 
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+      box-sizing: border-box; 
+    }
+    
     .card-title { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
 
     /* CARD SISTEMA OPERACIONAL */
     .row-os { width: 100%; }
-    .card-os { width: 100%; overflow: hidden; position: relative; min-height: 95px; }
+    .card-os { width: 100%; overflow: hidden; position: relative; min-height: 90px; }
     .os-bg-logo { 
       position: absolute; 
       right: 15px; 
       bottom: -10px; 
-      width: 120px; 
-      height: 120px; 
+      width: 110px; 
+      height: 110px; 
       opacity: 0.15; 
       background-size: contain; 
       background-repeat: no-repeat; 
@@ -183,12 +233,26 @@ static const char index_html[] PROGMEM = R"rawliteral(
     .os-name { font-size: 22px; font-weight: bold; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
     .os-details { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--text-muted); }
 
-    /* GAUGES CIRCULARES */
-    .row-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; width: 100%; }
+    /* GAUGES CIRCULARES - 4 COLUNAS FIXAS ENQUADRADAS NA MESMA LINHA */
+    .row-top { 
+      display: grid; 
+      grid-template-columns: repeat(4, minmax(0, 1fr)); 
+      gap: 12px; 
+      width: 100%; 
+    }
+    .row-top .card {
+      padding: 14px 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+    }
     .gauge-container { 
       position: relative; 
-      width: 100px; 
-      height: 100px; 
+      width: 95px; 
+      max-width: 100%;
+      height: 95px; 
       margin: 0 auto; 
       display: flex; 
       align-items: center; 
@@ -199,39 +263,37 @@ static const char index_html[] PROGMEM = R"rawliteral(
       top: 50%; 
       left: 50%; 
       transform: translate(-50%, -50%); 
-      font-size: 16px; 
+      font-size: 15px; 
       font-weight: bold; 
       line-height: 1; 
       pointer-events: none; 
       margin: 0; 
       padding: 0;
     }
-    .stat-label { text-align: center; font-size: 12px; color: var(--accent-cyan); font-weight: bold; margin-top: 8px; white-space: nowrap; }
+    .stat-label { 
+      text-align: center; 
+      font-size: 11px; 
+      color: var(--accent-cyan); 
+      font-weight: bold; 
+      margin-top: 8px; 
+      white-space: nowrap; 
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
 
     /* MÉTRICAS EMPILHADAS */
     .row-bottom { width: 100%; }
-    .card-metrics { width: 100%; display: flex; flex-direction: column; gap: 15px; }
-    .metrics-stack { display: flex; flex-direction: column; gap: 15px; }
+    .card-metrics { width: 100%; display: flex; flex-direction: column; gap: 14px; }
+    .metrics-stack { display: flex; flex-direction: column; gap: 14px; }
     .metric-item { width: 100%; display: flex; flex-direction: column; }
     .metric-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .metric-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
     .spectrum-bar { height: 10px; border-radius: 5px; background: #251342; overflow: hidden; position: relative; }
     .spectrum-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta)); transition: width 0.5s ease; }
-    .sub-text { font-size: 11px; color: var(--text-muted); margin-top: 5px; display: block; }
+    .sub-text { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block; }
 
-    .metrics-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--border-card); padding-top: 10px; margin-top: 5px; }
-
-    .host-section {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      padding-bottom: 30px;
-      border-bottom: 1px dashed var(--border-card);
-    }
-    .host-section:last-child {
-      border-bottom: none;
-      padding-bottom: 0;
-    }
+    .metrics-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--border-card); padding-top: 10px; margin-top: 4px; }
 
     /* Regra de Recolhimento do Menu */
     #menu-toggle:checked ~ .sidebar {
@@ -269,10 +331,10 @@ static const char index_html[] PROGMEM = R"rawliteral(
           <text>Dashboard</text>
       </label>
       
-        <ul class="nav-links">
-          <li><a href="/dashboard"><i class="material-symbols-outlined">dashboard</i> <span>Dashboard</span></a></li>
-          <li><a href="/config"><i class="material-symbols-outlined">settings</i> <span>Configurações</span></a></li>
-        </ul>
+      <ul class="nav-links">
+        <li><a href="/dashboard"><i class="material-symbols-outlined">dashboard</i> <span>Dashboard</span></a></li>
+        <li><a href="/config"><i class="material-symbols-outlined">settings</i> <span>Configurações</span></a></li>
+      </ul>
   </div>
 
   <div class="main-wrapper">
@@ -293,7 +355,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
 
     <main class="content">
       <div class="breadcrumb">Dashboard / Home</div>
-      <div id="dashboard-container" style="display: flex; flex-direction: column; gap: 30px;">
+      <div id="dashboard-container">
         <!-- Os blocos de cada Host serão renderizados dinamicamente aqui -->
       </div>
     </main>
@@ -378,7 +440,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
 
       container.innerHTML = `
         <div class="row-os">
-          <div class="card card-os">
+          <div class="card card-os" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="os-bg-logo" id="os-bg-logo-${safeKey}"></div>
             <div class="os-content">
               <div class="card-title" style="color: var(--accent-yellow);">SISTEMA OPERACIONAL</div>
@@ -389,7 +451,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
         </div>
 
         <div class="row-top">
-          <div class="card">
+          <div class="card" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="gauge-container">
               <canvas id="gaugeCpu-${safeKey}"></canvas>
               <div class="gauge-value" id="cpu-value-${safeKey}">0%</div>
@@ -397,7 +459,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
             <div class="stat-label">CARGA CPU</div>
           </div>
 
-          <div class="card">
+          <div class="card" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="gauge-container">
               <canvas id="gaugeRam-${safeKey}"></canvas>
               <div class="gauge-value" id="ram-value-${safeKey}">0%</div>
@@ -405,7 +467,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
             <div class="stat-label">MEMÓRIA RAM</div>
           </div>
 
-          <div class="card">
+          <div class="card" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="gauge-container">
               <canvas id="gaugeDisk-${safeKey}"></canvas>
               <div class="gauge-value" id="disk-value-${safeKey}">0%</div>
@@ -413,7 +475,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
             <div class="stat-label">DISCO AMBIENTE</div>
           </div>
 
-          <div class="card">
+          <div class="card" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="gauge-container">
               <canvas id="gaugeTemp-${safeKey}"></canvas>
               <div class="gauge-value" id="temp-value-${safeKey}">0°C</div>
@@ -423,7 +485,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
         </div>
 
         <div class="row-bottom">
-          <div class="card card-metrics">
+          <div class="card card-metrics" style="border: 1px solid var(--border-card); border-radius: 10px;">
             <div class="card-title" style="color: var(--accent-magenta);">MÉTRICAS EM TEMPO REAL</div>
             
             <div class="metrics-stack">
@@ -457,7 +519,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
                 <span class="sub-text" id="uptime-label-${safeKey}" style="margin-top:0;">Uptime: --</span>
               </div>
             </div>
-            <div style="margin-top: 5px;">
+            <div style="margin-top: 3px;">
               <span class="sub-text" id="id-label-${safeKey}" style="margin-top:0;">ID: --</span>
             </div>
           </div>
