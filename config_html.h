@@ -10,6 +10,8 @@ static const char config_html[] PROGMEM = R"rawliteral(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nexus Telemetry - Configurações</title>
   <style>
+    @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
+    @import url('https://fonts.googleapis.com/css2?family=Vast+Shadow&display=swap');
     :root {
       --bg-main: #0a0413;
       --bg-sidebar: #120724;

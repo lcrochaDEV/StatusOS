@@ -195,7 +195,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
         padding: 8px;
         background: rgba(48, 38, 63, 0.45);
         border: 1px solid var(--border-card);
-        border-radius: 19px;
+        border-radius: 10px;
         box-shadow: 0 6px 25px rgba(0, 0, 0, 0.3);
         overflow: hidden;
       }
