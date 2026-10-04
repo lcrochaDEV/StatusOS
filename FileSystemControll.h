@@ -5,23 +5,36 @@
 
 class FileSystemControll {
 private:
-    static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21 utilizado para o controle
-    static const uint32_t PWM_FREQ = 5000;    // Frequência de 5 kHz para evitar oscilações
-    static const uint8_t PWM_RES = 8;         // Resolução de 8 bits (0 a 255)
-    static const uint8_t PWM_CHANNEL = 0;     // Canal PWM do ESP32
+    static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21[cite: 6]
+    static const uint32_t PWM_FREQ = 5000;    // 5 kHz[cite: 6]
+    static const uint8_t PWM_RES = 8;         // 8 bits (0 a 255)[cite: 6]
+    static const uint8_t PWM_CHANNEL = 0;     // Canal PWM[cite: 6]
+
+    uint8_t brilho_atual_pct = 80;            // Valor padrão inicial (80%)
 
 public:
     FileSystemControll();
     
-    // Inicializa o pino e o periférico PWM no ESP32
     void begin();
+    void setPinPwm(uint8_t valor); // 0 a 255[cite: 6]
+    void setPinPwm(bool ligado);   // LOW / HIGH[cite: 6]
 
-    // Define o brilho/potência aceitando valores de 0 a 255
-    // 0 = Desligado (LOW), 255 = Potência Máxima (HIGH), 1-254 = Ajuste PWM
-    void setPinPwm(uint8_t valor);
+    // Novo método para abstração percentual (0 a 100%)
+    void setBrilhoPorcentagem(uint8_t porcentagem) {
+        if (porcentagem > 100) porcentagem = 100;
+        brilho_atual_pct = porcentagem;
+        
+        // Mapeia de 0-100% para 0-255 PWM
+        uint8_t pwm_val = (porcentagem * 255) / 100;
+        setPinPwm(pwm_val);
+    }
 
-    // Sobrecarga para acionamento direto em modo LIGADO (HIGH) ou DESLIGADO (LOW)
-    void setPinPwm(bool ligado);
+    uint8_t obterBrilhoPorcentagem() const {
+        return brilho_atual_pct;
+    }
 };
 
-#endif
+// Instância global para ser reutilizada no sistema
+extern FileSystemControll g_file_system_ctrl;
+
+#endif // FILE_SYSTEM_CONTROLL_H
