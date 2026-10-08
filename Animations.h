@@ -4,37 +4,49 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <AnimatedGIF.h>
+#include <functional>
+
+enum class GifID {
+    NONE,
+    BOOT,       
+    NOT_WIFI,   
+    NOT_WORKER, 
+    BUG_FRAME,  
+    STANDBY     
+};
 
 class Animations {
 public:
-    // Construtor recebendo a referência da instância do TFT e o pino de Backlight
-    Animations(TFT_eSPI& tft, uint8_t backlightPin);
-    ~Animations() = default;
+    explicit Animations(TFT_eSPI& tft);
+    ~Animations();
 
     void begin();
-    void update(); // Processa a atualização de quadros no loop principal
+    void update(); 
+
+    bool playAnimation(GifID animType);
+    bool playGif(const uint8_t* gifData, size_t gifSize);
     void stop();
 
-    // Métodos para carregar e reproduzir GIFs a partir da memória Flash (PROGMEM)
-    bool playGif(const uint8_t* gifData, size_t gifSize);
-    void notwifi(const uint8_t* gifData, size_t size);
-    void bugframe(const uint8_t* gifData, size_t size);
+    void onAnimationEnd(std::function<void()> callback);
 
-    // Controle de estado e energia
-    void controlPower(bool enable);
-    bool isPlaying() const { return _isPlaying; }
-    bool isActive() const { return _isActive; }
+    bool isPlaying() const { return _isPlaying || _isTestMode; }
+    bool isActive() const { return _currentAnim != GifID::NONE; }
+    GifID getCurrentAnimation() const { return _currentAnim; }
+
+    void testRedScreen();
 
 private:
     TFT_eSPI& _tft;
-    AnimatedGIF _gif;
-    uint8_t _backlightPin;
+    AnimatedGIF* _gif = nullptr;
+    bool _isPlaying = false;
+    bool _isTestMode = false;
+    bool _inStop = false; // Trava contra recursao infinita
+    GifID _currentAnim = GifID::NONE;
+    std::function<void()> _onEndCallback = nullptr;
 
-    bool _isActive;
-    bool _isPlaying;
-
-    // Callback estática acionada pelo AnimatedGIF para renderizar linhas de pixels no display
     static void GIFDraw(GIFDRAW *pDraw);
+    static void animationTask(void* pvParameters); // Task interna
+    TaskHandle_t _taskHandle = nullptr;
 };
 
 #endif // ANIMATIONS_H

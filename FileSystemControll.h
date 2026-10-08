@@ -5,10 +5,10 @@
 
 class FileSystemControll {
 private:
-    static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21[cite: 6]
-    static const uint32_t PWM_FREQ = 5000;    // 5 kHz[cite: 6]
-    static const uint8_t PWM_RES = 8;         // 8 bits (0 a 255)[cite: 6]
-    static const uint8_t PWM_CHANNEL = 0;     // Canal PWM[cite: 6]
+    static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21
+    static const uint32_t PWM_FREQ = 5000;    // 5 kHz
+    static const uint8_t PWM_RES = 8;         // 8 bits (0 a 255)
+    static const uint8_t PWM_CHANNEL = 0;     // Canal PWM
 
     uint8_t brilho_atual_pct = 80;            // Valor padrão inicial (80%)
 
@@ -16,8 +16,8 @@ public:
     FileSystemControll();
     
     void begin();
-    void setPinPwm(uint8_t valor); // 0 a 255[cite: 6]
-    void setPinPwm(bool ligado);   // LOW / HIGH[cite: 6]
+    void setPinPwm(uint8_t valor); // 0 a 255
+    void setPinPwm(bool ligado);   // LOW / HIGH
 
     // Novo método para abstração percentual (0 a 100%)
     void setBrilhoPorcentagem(uint8_t porcentagem) {

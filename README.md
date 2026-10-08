@@ -1,5 +1,6 @@
 #### Ideias
 1. se após 5 minutos não hover nunum payload vai entrar uma proteção de tela.
+2. corrigir tatal de espaço livre no dabian.
 
 
 # Telemetria & Monitoramento de Servidores (ESP32 + Linux Bash)
@@ -682,3 +683,29 @@ Realize uma análise técnica detalhada do código avaliando:
 - Acoplamento e coesão
 - Princípios SOLID
 ```
+
+
+Persona: DESENVOLVEDOR FULL STAKER EM C/C++
+
+CONTEXTO:
+criação de classe para exibição de gif animados.
+
+AÇÃO:
+cria a classe Animations, que vai realizar a criação de animações no display 2.8 inch tft, crie uma classe inteligente evitando
+loop que possam travar o modulo, mas exibindo de maneira leve.
+
+essa classe vai alternar junto ao deshboard, assim que ela for chamada o dasbord sai da tela, assim que a execução for parada volta ao deshboard.
+
+vou enviar junto o arquivo .h para Verificar.
+
+AÇÃO:
+Realize uma análise técnica detalhada do código avaliando:
+
+- Legibilidade
+- Manutenibilidade
+- Performance
+- Possíveis bugs
+- Tratamento de exceções
+- Acoplamento e coesão
+- Princípios SOLID
+

@@ -1,7 +1,7 @@
 #include "Console.h"
 
 Console::Console(const char* consoleText) 
-  : WifiConnect(),
+  : 
     _consoleText(consoleText != nullptr ? consoleText : "Mochi> "),
     _logsEnabled(false)
 {}
@@ -115,13 +115,15 @@ void Console::commands_envio(const String& command) {
         "SCANWF           - Realiza a varredura de redes Wi-Fi disponíveis\n"
         "SHOWDATA         - Exibe os dados do cartão SD em formato JSON\n"
         "DELETEDATA       - Apaga os arquivos de dados salvos no cartão SD\n"
-        "DISPLAYON        - Liga a tela do display OLED\n"
-        "DISPLAYOFF       - Desliga a tela do display OLED\n"
-        "ANIMACAO         - Executa a animação padrão no display OLED\n"
+        "DISplayGifON        - Liga a tela do displayGif OLED\n"
+        "DISplayGifOFF       - Desliga a tela do displayGif OLED\n"
+        "ANIMACAO         - Executa a animação padrão no displayGif OLED\n"
         "SETDELAY         - Ajusta a velocidade da animação (Ex: SETDELAY 0.09)\n"
         "SHOWWIFI         - Abre/fecha alternadamente o popup de Wi-Fi\n"
         "SHOWBRIGHT       - Abre/fecha alternadamente o popup de controle do brilho\n"
-        "SETBRIGHT <0-100>- Ajusta diretamente a porcentagem de brilho no hardware PWM"
+        "SETBRIGHT <0-100>- Ajusta diretamente a porcentagem de brilho no hardware PWM\n"
+        "PS1               - \n"
+        "STOP             - "
       );
   }
   // Controle de Logs
@@ -132,26 +134,23 @@ void Console::commands_envio(const String& command) {
   // UI_DASHBOARD & POPUPS
   else if (command == "SHOWWIFI" || command == "WIFI") {
     menssageViewMsg("[Console] Executando comando para Popup de Wi-Fi...");
-    static bool event_popup = false;
-    if(!event_popup) {
+    if(!_event_popup) {
       ui_abrir_popup_wifi(); // Chamada direta para acionar a interface visual do LVGL
-      event_popup = true;
+      _event_popup = true;
     } else {
       ui_fechar_popup_wifi(); // Fechando Popup de Wi-Fi
-      event_popup = false;
+      _event_popup = false;
     }
   }
   else if (command == "SHOWBRIGHT" || command == "BRIGHT") {
-    static bool event_brilho = false;
-
-    if (!event_brilho) {
+    if (!_event_brilho) {
       menssageViewMsg("[Console] Exibindo Popup de Brilho...");
       ui_abrir_popup_brilho();
-      event_brilho = true;
+      _event_brilho = true;
     } else {
       menssageViewMsg("[Console] Fechando Popup de Brilho...");
       ui_fechar_popup_brilho();
-      event_brilho = false;
+      _event_brilho = false;
     }
   }
   // COMANDO HARDWARE PWM: Ajuste de Brilho Direto (Ex: SETBRIGHT 75 ou BRIGHT 50)
@@ -162,7 +161,7 @@ void Console::commands_envio(const String& command) {
         g_file_system_ctrl.setBrilhoPorcentagem((uint8_t)valor_pct); // Aplica no hardware PWM
         
         char msg[64];
-        snprintf(msg, sizeof(msg), "[Console] Brilho do Display ajustado para %d%%", valor_pct);
+        snprintf(msg, sizeof(msg), "[Console] Brilho do DisplayGif ajustado para %d%%", valor_pct);
         menssageViewMsg(msg);
       } else {
         menssageViewMsg("[Console] Erro: Informe um valor entre 0 e 100.");
@@ -171,7 +170,50 @@ void Console::commands_envio(const String& command) {
       menssageViewMsg("[Console] Uso: SETBRIGHT <0-100> (Ex: SETBRIGHT 80)");
     }
   }
-
-  // Desenha o prompt uma única vez ao final de cada comando processado
-  printPrompt();
+  
+  // COMANDOS DE ACIONAMENTO DE ANIMAÇÕES
+  else if (cmd == "PS1" || (cmd == "ANIMACAO" && (paramStr == "BOOT" || paramStr == "PS1"))) {
+    if (_anim != nullptr) {
+      menssageViewMsg("[Console] Executando animação PS1 Startup...");
+      _anim->playAnimation(GifID::BOOT);
+    } else {
+      menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
+    }
+    printPrompt();
+  }
+  else if (cmd == "ANIMACAO" || cmd == "GIF" || cmd == "playGifGIF") {
+    if (_anim == nullptr) {
+      menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
+    } else if (paramStr == "NOTWIFI" || paramStr == "WIFI") {
+      menssageViewMsg("[Console] Executando animação: Sem Wi-Fi...");
+      _anim->playAnimation(GifID::NOT_WIFI);
+    } else if (paramStr == "BUG" || paramStr == "BUG_FRAME") {
+      menssageViewMsg("[Console] Executando animação: Bug Frame...");
+      _anim->playAnimation(GifID::BUG_FRAME);
+    } else {
+      menssageViewMsg("[Console] Uso: ANIMACAO <BOOT | NOTWIFI | BUG>");
+    }
+    printPrompt();
+  }
+  else if (cmd == "TESTRED" || cmd == "RED") {
+    if (_anim != nullptr) {
+      menssageViewMsg("[Console] Executando teste: Tela Vermelha...");
+      (!_redteste_event) ? _anim->testRedScreen() : _anim->stop(); // Executa o teste na classe Animations
+       _redteste_event = !_redteste_event; 
+    } else {
+      menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
+    }
+    printPrompt();
+  } 
+  
+  // COMANDO PARA PARAR A ANIMAÇÃO OU TESTE E RETORNAR AO DASHBOARD
+  else if (cmd == "STOP" || cmd == "STOPGIF" || cmd == "DASHBOARD") {
+    if (_anim != nullptr) {
+      _anim->stop(); // Chama o stop() que força o redesenho no LVGL
+      menssageViewMsg("[Console] Teste/Animação parada. Retornando ao Dashboard LVGL.");
+    } else {
+      menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
+    }
+    printPrompt();
+  }
 }

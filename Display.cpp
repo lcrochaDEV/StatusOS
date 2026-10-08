@@ -1,7 +1,8 @@
 #include "Display.h"
 
-Display::Display(uint8_t backlightPin) 
-    : draw_buf(nullptr), disp(nullptr), last_tick(0), 
+// Construtor inicializa a referência _tft
+Display::Display(TFT_eSPI& tft, uint8_t backlightPin) 
+    : _tft(tft), draw_buf(nullptr), disp(nullptr), last_tick(0), 
       _backlightPin(backlightPin), _currentBrightness(255) {}
 
 Display::~Display() {
@@ -18,10 +19,11 @@ IRAM_ATTR void Display::my_disp_flush(lv_display_t *disp, const lv_area_t *area,
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
 
-    self->tft.startWrite();
-    self->tft.setAddrWindow(area->x1, area->y1, w, h);
-    self->tft.pushColors((uint16_t *)px_map, w * h, true);
-    self->tft.endWrite();
+    // Utiliza a referência injetada do hardware compartilhado
+    self->_tft.startWrite();
+    self->_tft.setAddrWindow(area->x1, area->y1, w, h);
+    self->_tft.pushColors((uint16_t *)px_map, w * h, true);
+    self->_tft.endWrite();
 
     lv_display_flush_ready(disp);
 }
@@ -33,12 +35,7 @@ bool Display::begin() {
     pinMode(_backlightPin, OUTPUT);
     setBrightness(_currentBrightness); // Inicia em 100% (255)
 
-    // 2. Inicialização do TFT
-    tft.init();
-    tft.setRotation(1);
-    tft.invertDisplay(false); 
-
-    // 3. Alocação do buffer para LVGL v9
+    // 2. Alocação do buffer para LVGL v9 na Heap Dinâmica
     if (draw_buf == nullptr) {
         draw_buf = static_cast<uint8_t *>(heap_caps_malloc(DRAW_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         if (draw_buf == nullptr) {
@@ -47,7 +44,7 @@ bool Display::begin() {
         }
     }
 
-    // 4. Configuração do LVGL v9
+    // 3. Configuração do LVGL v9
     lv_init();
 
     disp = lv_display_create(320, 240);
@@ -101,15 +98,3 @@ void Display::fadeTo(uint8_t targetValue, uint16_t durationMs) {
         delay(stepDelay);
     }
 }
-
-/*EXEMPLO DE USO DO METODO CONTROLE DE BRILHO*/
-/*
-// Alterar o brilho para 50% (valor 128) de forma instantânea:
-display.setBrightness(128);
-
-// Clarear gradualmente para o máximo (255) em 500ms:
-display.fadeTo(255, 500);
-
-// Escurecer gradualmente até apagar (0) em 1 segundo:
-display.fadeTo(0, 1000);
-*/

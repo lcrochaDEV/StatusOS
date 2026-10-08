@@ -7,29 +7,28 @@
 
 class Display {
 public:
-    // Construtor definindo o GPIO 21 como pino padrão do Backlight
-    Display(uint8_t backlightPin = 21);
+    // Construtor recebendo a referência injetada do TFT único
+    Display(TFT_eSPI& tft, uint8_t backlightPin = 21);
     ~Display();
 
     bool begin();
     void update();
 
-    // --- Métodos de Controle do Backlight / PWM (Pino 21) ---
-    void setBacklight(bool enable);                          // Liga (255) ou Desliga (0)
-    void setBrightness(uint8_t val);                        // Ajusta o brilho diretamente (0 a 255)
-    void fadeTo(uint8_t targetValue, uint16_t durationMs = 300); // Transição suave para escurecer ou clarear
+    // Métodos de controle do Backlight
+    void setBacklight(bool enable);
+    void setBrightness(uint8_t val);
+    void fadeTo(uint8_t targetValue, uint16_t durationMs = 300);
 
     uint8_t getBrightness() const { return _currentBrightness; }
-    TFT_eSPI& getTft() { return tft; }
+    TFT_eSPI& getTft() { return _tft; }
     bool isInitialized() const { return disp != nullptr; }
 
 private:
-    TFT_eSPI tft;
+    TFT_eSPI& _tft; // Referência para a instância global do .ino
     uint8_t *draw_buf;
     lv_display_t *disp;
     uint32_t last_tick;
 
-    // Controle de hardware do Backlight
     uint8_t _backlightPin;
     uint8_t _currentBrightness;
 

@@ -150,8 +150,7 @@ inline void update_display_and_ws() {
     int ram_pct = (g_telemetry.ram_total_bytes > 0) ? (int)((g_telemetry.ram_used_bytes * 100ULL) / g_telemetry.ram_total_bytes) : 0;
     int disk_pct = (g_telemetry.disk_total_bytes > 0) ? (int)((g_telemetry.disk_used_bytes * 100ULL) / g_telemetry.disk_total_bytes) : 0;
 
-    if (ws.count() > 0) ws.textAll(build_json_string());
-
+    if (ws.count() > 0 && ws.availableForWriteAll()) ws.textAll(build_json_string());
 
     update_telemetry_data(
         g_telemetry.host,
@@ -369,10 +368,15 @@ inline void setup_web_server() {
 }
 
 inline void process_web_server_tasks() {
+    // 1. A limpeza dos clientes DEVE ser executada sempre para liberar a RAM
+    ws.cleanupClients();
+
     if (!g_webserver_state) return;
 
-    ws.cleanupClients();
     uint32_t now = millis();
+
+    // Limitador de taxa para envio de WebSocket (Max 1 atualização a cada 500ms)
+    static uint32_t last_ws_send_ms = 0;
 
     if (!g_telemetry_list.empty()) {
         uint32_t timeout_threshold_ms = DISPLAY_ROTATION_INTERVAL_MS * 2 * g_telemetry_list.size();
@@ -393,9 +397,7 @@ inline void process_web_server_tasks() {
                 g_telemetry = TelemetryData();
                 g_telemetry.updated = true;
             } else {
-                if (g_current_display_index >= g_telemetry_list.size()) {
-                    g_current_display_index = 0;
-                }
+                if (g_current_display_index >= g_telemetry_list.size()) g_current_display_index = 0;
                 g_telemetry = g_telemetry_list[g_current_display_index];
                 g_telemetry.updated = true;
             }
@@ -411,10 +413,13 @@ inline void process_web_server_tasks() {
         }
     }
 
-    if (g_telemetry.updated) {
+    if (g_telemetry.updated && (now - last_ws_send_ms >= 500)) {
         g_telemetry.updated = false;
+        last_ws_send_ms = now;
         update_display_and_ws();
     }
+
+    yield();
 }
 
 #endif // SERVIDORWEB_H

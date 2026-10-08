@@ -159,15 +159,15 @@ private:
 
     // Callback executado dinamicamente ao deslizar o dedo no Slider da tela
     static void slider_brilho_event_cb(lv_event_t * e) {
-        auto * ui = static_cast<DashboardUI*>(lv_event_get_user_data(e)); //[cite: 4]
-        auto * slider = static_cast<lv_obj_t*>(lv_event_get_target(e)); //[cite: 4]
+        auto * ui = static_cast<DashboardUI*>(lv_event_get_user_data(e));
+        auto * slider = static_cast<lv_obj_t*>(lv_event_get_target(e));
         if (!slider || !ui) return;
 
         int val = (int)lv_slider_get_value(slider);
 
         // 1. Atualiza o texto na interface em tempo real
         if (ui->label_brilho_pct) {
-            lv_label_set_text_fmt(ui->label_brilho_pct, "Brilho: %d%%", val); //[cite: 4]
+            lv_label_set_text_fmt(ui->label_brilho_pct, "Brilho: %d%%", val);
         }
 
         // 2. Interage diretamente com o Hardware PWM
@@ -226,43 +226,43 @@ public:
     }
 
     void mostrar_popup_brilho() {
-        if (msgbox_brilho != nullptr) return; //[cite: 4]
+        if (msgbox_brilho != nullptr) return;
 
-        msgbox_brilho = create_base_popup("Brilho do Display"); //[cite: 4]
+        msgbox_brilho = create_base_popup("Brilho do Display");
         if (!msgbox_brilho) return;
 
-        lv_obj_t * content = lv_msgbox_get_content(msgbox_brilho); //[cite: 4]
+        lv_obj_t * content = lv_msgbox_get_content(msgbox_brilho);
         if (content) {
-            lv_obj_set_style_bg_color(content, UITheme::CARD_BG, LV_PART_MAIN); //[cite: 4]
-            lv_obj_set_style_bg_opa(content, LV_OPA_COVER, LV_PART_MAIN); //[cite: 4]
-            lv_obj_set_style_pad_all(content, 16, LV_PART_MAIN); //[cite: 4]
-            lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN); //[cite: 4]
-            lv_obj_set_flex_align(content, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER); //[cite: 4]
+            lv_obj_set_style_bg_color(content, UITheme::CARD_BG, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(content, LV_OPA_COVER, LV_PART_MAIN);
+            lv_obj_set_style_pad_all(content, 16, LV_PART_MAIN);
+            lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(content, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         }
 
         // Obtém o valor atual real vindo do hardware
         uint8_t valor_atual = g_file_system_ctrl.obterBrilhoPorcentagem();
 
         // 1. Slider de Brilho
-        lv_obj_t * slider = lv_slider_create(content); //[cite: 4]
-        lv_obj_set_size(slider, 180, 12); //[cite: 4]
-        lv_slider_set_range(slider, 10, 100); //[cite: 4]
-        lv_slider_set_value(slider, valor_atual, LV_ANIM_OFF); //[cite: 4]
+        lv_obj_t * slider = lv_slider_create(content);
+        lv_obj_set_size(slider, 180, 12);
+        lv_slider_set_range(slider, 10, 100);
+        lv_slider_set_value(slider, valor_atual, LV_ANIM_OFF);
         
-        lv_obj_set_style_bg_color(slider, UITheme::ARC_CPU, LV_PART_INDICATOR); //[cite: 4]
-        lv_obj_set_style_bg_color(slider, UITheme::BORDER_IDLE, LV_PART_MAIN); //[cite: 4]
-        lv_obj_add_event_cb(slider, slider_brilho_event_cb, LV_EVENT_VALUE_CHANGED, this); //[cite: 4]
+        lv_obj_set_style_bg_color(slider, UITheme::ARC_CPU, LV_PART_INDICATOR);
+        lv_obj_set_style_bg_color(slider, UITheme::BORDER_IDLE, LV_PART_MAIN);
+        lv_obj_add_event_cb(slider, slider_brilho_event_cb, LV_EVENT_VALUE_CHANGED, this);
 
         // 2. Texto com a porcentagem
-        label_brilho_pct = lv_label_create(content); //[cite: 4]
+        label_brilho_pct = lv_label_create(content);
         if (label_brilho_pct) {
-            lv_label_set_text_fmt(label_brilho_pct, "Brilho: %d%%", valor_atual); //[cite: 4]
-            lv_obj_set_style_text_color(label_brilho_pct, UITheme::TEXT_WHITE, LV_PART_MAIN); //[cite: 4]
-            lv_obj_set_style_pad_top(label_brilho_pct, 10, LV_PART_MAIN); //[cite: 4]
+            lv_label_set_text_fmt(label_brilho_pct, "Brilho: %d%%", valor_atual);
+            lv_obj_set_style_text_color(label_brilho_pct, UITheme::TEXT_WHITE, LV_PART_MAIN);
+            lv_obj_set_style_pad_top(label_brilho_pct, 10, LV_PART_MAIN);
         }
 
-        setup_footer_button(msgbox_brilho, "OK", fechar_popup_brilho_cb); //[cite: 4]
-        lv_obj_center(msgbox_brilho); //[cite: 4]
+        setup_footer_button(msgbox_brilho, "OK", fechar_popup_brilho_cb);
+        lv_obj_center(msgbox_brilho);
     }
 
     void fechar_popup_brilho() {
