@@ -124,9 +124,7 @@ void Animations::stop() {
     _inStop = true;
 
     _isTestMode = false;      
-    if (_gif && _isPlaying) {
-        _gif->close();
-    }
+    if (_gif && _isPlaying) _gif->close();
 
     _isPlaying = false;
     _currentAnim = GifID::NONE;

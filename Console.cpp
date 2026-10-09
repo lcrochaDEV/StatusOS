@@ -199,7 +199,7 @@ void Console::commands_envio(const String& command) {
     if (_anim != nullptr) {
       menssageViewMsg("[Console] Executando teste: Tela Vermelha...");
       (!_redteste_event) ? _anim->testRedScreen() : _anim->stop(); // Executa o teste na classe Animations
-       _redteste_event = !_redteste_event; 
+      _redteste_event = !_redteste_event; 
     } else {
       menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
     }

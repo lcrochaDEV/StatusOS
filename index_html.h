@@ -673,7 +673,34 @@ static const char index_html[] PROGMEM = R"rawliteral(
       if (elDiskSub) elDiskSub.textContent = `${diskVal}% (${formatDynamicBytes(Math.max(0, diskTotalBytes - diskUsedBytes))} livre)`;
 
       if (elRamTotalLabel) elRamTotalLabel.textContent = 'Total: ' + formatDynamicBytes(ramTotalBytes);
-      if (elDiskTotalLabel) elDiskTotalLabel.textContent = 'Total: ' + formatDynamicBytes(diskTotalBytes);
+
+      // EXTRAÇÃO E FORMATAÇÃO DO MODELO DE DISCO
+      let diskModelText = '';
+      let diskModelList = '';
+
+      const hwDisks = data.metricas?.hardware_discos || data.hardware_discos;
+      if (Array.isArray(hwDisks) && hwDisks.length > 0) {
+        const models = hwDisks
+          .map(d => d.model)
+          .filter(m => m && m !== 'Desconhecido');
+
+        if (models.length > 0) {
+          diskModelList = models.join(', ');
+          diskModelText = ' | ' + diskModelList;
+        }
+      }
+
+      if (elDiskTotalLabel) {
+        elDiskTotalLabel.textContent = 'Total: ' + formatDynamicBytes(diskTotalBytes) + diskModelText;
+
+        if (diskModelList) {
+          elDiskTotalLabel.title = "Modelo(s) do HD: " + diskModelList;
+          elDiskTotalLabel.style.cursor = "pointer";
+        } else {
+          elDiskTotalLabel.removeAttribute('title');
+          elDiskTotalLabel.style.cursor = "default";
+        }
+      }
 
       if (elHost) elHost.textContent = 'Host: ' + host + ' | IP: ' + ip + ' | MAC: ' + mac;
       if (elDatetime) elDatetime.textContent = 'Data: ' + datetime;

@@ -13,6 +13,16 @@
 #include "physicalAccessControl.h"
 PhysicalAccessControl physicalAccessControl; 
 
+// Estrutura para os Discos Físicos Individuais (hardware_discos)
+struct DiskInfo {
+    char device[32] = "";
+    char model[64] = "Desconhecido";
+    uint64_t total_bytes = 0;
+    uint64_t usado_bytes = 0;
+    uint64_t livre_bytes = 0;
+    char health_status[16] = "UNKNOWN";
+};
+
 // Estrutura de Telemetria mantendo DADOS BRUTOS (raw data)
 struct TelemetryData {
     char id[64] = "N/A";
@@ -32,6 +42,9 @@ struct TelemetryData {
     uint64_t disk_total_bytes = 0;
     uint64_t disk_used_bytes  = 0;
     
+    // Lista de Discos Físicos do Sistema
+    std::vector<DiskInfo> hardware_discos;
+
     bool online = false;
     volatile bool updated = false;
     char datetime[64] = "";
@@ -74,27 +87,22 @@ String processor(const String& var) {
 }
 
 void handleDateTime(AsyncWebServerRequest *request) {
-    // Obter o tempo atual do sistema (assumindo que o NTP foi configurado)
     time_t now = time(nullptr); 
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
     
-    // Alocação de memória para strings formatadas
-    char dateString[11]; // DD/MM/YYYY + '\0'
-    char hourString[9]; // HH:MM:SS + '\0'
+    char dateString[11]; 
+    char hourString[9]; 
 
-    // Formata a data e hora
     strftime(dateString, sizeof(dateString), "%d/%m/%Y", &timeinfo);
     strftime(hourString, sizeof(hourString), "%H:%M:%S", &timeinfo);
     
-    // Constrói a resposta JSON para o JavaScript
     String responseJson = "{\"date\":\"";
     responseJson += dateString;
     responseJson += "\",\"time\":\"";
     responseJson += hourString;
     responseJson += "\"}";
 
-    // Envia a resposta JSON. É ESSENCIAL usar send() aqui.
     request->send(200, "application/json", responseJson);
 }
 
@@ -111,7 +119,6 @@ inline TelemetryData* get_or_create_host(const char* id_or_name) {
     return &g_telemetry_list.back();
 }
 
-// Gera o JSON com os DADOS BRUTOS de RAM e Disco para o Front-End converter
 inline String build_json_string() {
     JsonDocument doc;
     JsonArray hostsArray = doc.to<JsonArray>();
@@ -130,12 +137,34 @@ inline String build_json_string() {
         obj["temp"] = item.temp;
         obj["cpu_load"] = item.cpu_load;
         
-        // Envio de Dados Brutos em Bytes
         obj["ram_total_bytes"]  = item.ram_total_bytes;
         obj["ram_used_bytes"]   = item.ram_used_bytes;
         obj["disk_total_bytes"] = item.disk_total_bytes;
         obj["disk_used_bytes"]  = item.disk_used_bytes;
         
+        JsonObject metricasObj = obj["metricas"].to<JsonObject>();
+        metricasObj["cpu_temp"] = item.temp;
+        metricasObj["cpu_load_1m"] = item.cpu_load;
+
+        JsonObject memObj = metricasObj["memoria"].to<JsonObject>();
+        memObj["total_bytes"] = item.ram_total_bytes;
+        memObj["usada_bytes"] = item.ram_used_bytes;
+
+        JsonObject diskObj = metricasObj["disco"].to<JsonObject>();
+        diskObj["total_bytes"] = item.disk_total_bytes;
+        diskObj["usado_bytes"] = item.disk_used_bytes;
+
+        JsonArray hwDisksArr = metricasObj["hardware_discos"].to<JsonArray>();
+        for (const auto& d : item.hardware_discos) {
+            JsonObject diskItem = hwDisksArr.add<JsonObject>();
+            diskItem["device"] = d.device;
+            diskItem["model"] = d.model;
+            diskItem["total_bytes"] = d.total_bytes;
+            diskItem["usado_bytes"] = d.usado_bytes;
+            diskItem["livre_bytes"] = d.livre_bytes;
+            diskItem["health_status"] = d.health_status;
+        }
+
         obj["logo_url"] = item.logo_url;
         obj["online"]   = item.online;
     }
@@ -146,9 +175,14 @@ inline String build_json_string() {
 }
 
 inline void update_display_and_ws() {
-    // Para o Display local TFT, se necessário, calculamos localmente
-    int ram_pct = (g_telemetry.ram_total_bytes > 0) ? (int)((g_telemetry.ram_used_bytes * 100ULL) / g_telemetry.ram_total_bytes) : 0;
-    int disk_pct = (g_telemetry.disk_total_bytes > 0) ? (int)((g_telemetry.disk_used_bytes * 100ULL) / g_telemetry.disk_total_bytes) : 0;
+    // Alinhamento exato de arredondamento com o JavaScript (Math.round)
+    int ram_pct = (g_telemetry.ram_total_bytes > 0) 
+        ? (int)(((g_telemetry.ram_used_bytes * 100ULL) + (g_telemetry.ram_total_bytes / 2ULL)) / g_telemetry.ram_total_bytes) 
+        : 0;
+
+    int disk_pct = (g_telemetry.disk_total_bytes > 0) 
+        ? (int)(((g_telemetry.disk_used_bytes * 100ULL) + (g_telemetry.disk_total_bytes / 2ULL)) / g_telemetry.disk_total_bytes) 
+        : 0;
 
     if (ws.count() > 0 && ws.availableForWriteAll()) ws.textAll(build_json_string());
 
@@ -165,8 +199,6 @@ inline void update_display_and_ws() {
     );
     update_status(g_telemetry.online);
 }
-
-// Extrator flexível de dados brutos do JSON recebido
 inline bool parse_telemetry_json(uint8_t *data, size_t len) {
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, data, len);
@@ -202,7 +234,6 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
         if (doc["kernel"].is<const char*>()) strncpy(target_host->kernel, doc["kernel"], sizeof(target_host->kernel) - 1);
     }
 
-    // Leitura Flexível de Métricas de Memória e Disco (Bytes ou conversão automática de KB/MB caso o agente seja antigo)
     if (doc["metricas"].is<JsonObject>()) {
         JsonObject metricas = doc["metricas"];
         if (!metricas["cpu_temp"].isNull()) target_host->temp = metricas["cpu_temp"].as<float>();
@@ -228,6 +259,26 @@ inline bool parse_telemetry_json(uint8_t *data, size_t len) {
             if (!dsk["usado_bytes"].isNull()) target_host->disk_used_bytes = dsk["usado_bytes"].as<uint64_t>();
             else if (!dsk["usado_kb"].isNull()) target_host->disk_used_bytes = dsk["usado_kb"].as<uint64_t>() * 1024ULL;
             else if (!dsk["usado_mb"].isNull()) target_host->disk_used_bytes = dsk["usado_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
+        }
+
+        target_host->hardware_discos.clear();
+        if (metricas["hardware_discos"].is<JsonArray>()) {
+            JsonArray discosArr = metricas["hardware_discos"].as<JsonArray>();
+            for (JsonObject d : discosArr) {
+                DiskInfo disk;
+                if (d["device"].is<const char*>()) strncpy(disk.device, d["device"], sizeof(disk.device) - 1);
+                if (d["model"].is<const char*>()) strncpy(disk.model, d["model"], sizeof(disk.model) - 1);
+                
+                if (!d["total_bytes"].isNull()) disk.total_bytes = d["total_bytes"].as<uint64_t>();
+                else if (!d["size_bytes"].isNull()) disk.total_bytes = d["size_bytes"].as<uint64_t>();
+
+                if (!d["usado_bytes"].isNull()) disk.usado_bytes = d["usado_bytes"].as<uint64_t>();
+                if (!d["livre_bytes"].isNull()) disk.livre_bytes = d["livre_bytes"].as<uint64_t>();
+
+                if (d["health_status"].is<const char*>()) strncpy(disk.health_status, d["health_status"], sizeof(disk.health_status) - 1);
+
+                target_host->hardware_discos.push_back(disk);
+            }
         }
     } else {
         if (!doc["temp"].isNull()) target_host->temp = doc["temp"].as<float>();
@@ -341,7 +392,7 @@ inline void setup_web_server() {
         }
         request->send(200, "text/html", index_html);
     });
-      // NOVO: Rota para Data e Hora Dinâmicas (JSON)
+
     server.on("/datetime", HTTP_GET, handleDateTime); 
 
     server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -368,14 +419,11 @@ inline void setup_web_server() {
 }
 
 inline void process_web_server_tasks() {
-    // 1. A limpeza dos clientes DEVE ser executada sempre para liberar a RAM
     ws.cleanupClients();
 
     if (!g_webserver_state) return;
 
     uint32_t now = millis();
-
-    // Limitador de taxa para envio de WebSocket (Max 1 atualização a cada 500ms)
     static uint32_t last_ws_send_ms = 0;
 
     if (!g_telemetry_list.empty()) {

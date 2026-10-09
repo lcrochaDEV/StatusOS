@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>
 #include "WifiConnect.h"
 #include "FileSystemControll.h"
 
@@ -172,7 +173,6 @@ private:
 
         // 2. Interage diretamente com o Hardware PWM
         g_file_system_ctrl.setBrilhoPorcentagem(val);
-        Serial.printf("[UI->Hardware] Brilho alterado via Touch: %d%%\n", val);
     }
 
     static void fechar_popup_wifi_cb(lv_event_t * e) {

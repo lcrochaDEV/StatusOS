@@ -114,9 +114,7 @@ void Hours_Time::manual_turn_on() {
 }
 
 void Hours_Time::monitorarConexao() {
-    if (WiFi.status() != WL_CONNECTED) {
-        Serial.println("[NTP] Conexão Wi-Fi perdida. Aguardando reconexão...");
-    }
+    if (WiFi.status() != WL_CONNECTED) Serial.println("[NTP] Conexão Wi-Fi perdida. Aguardando reconexão...");
 }
 
 const char* Hours_Time::losttime() const {

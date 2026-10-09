@@ -9,6 +9,7 @@
 
 // Adicione PROGMEM para mover esses bytes para a memória FLASH
 const uint8_t PS1_Startup[] PROGMEM = {
+ 
 };
 
 #endif // PS1_STARTUP_
