@@ -507,3 +507,50 @@ Realize uma análise técnica detalhada do código avaliando:
 - Acoplamento e coesão
 - Princípios SOLID
 
+
+```cpp
+
+        case GifID::BOOT:
+            if (_currentAnim == GifID::BOOT) {
+                stop();
+                _isTestMode = false;
+            } else {
+                stop();
+                _currentAnim = GifID::BOOT;
+                _isTestMode = true; 
+                
+                // Se o seu método de animação for não-bloqueante (roda dentro de um loop principal/ticker),
+                // você deve inicializar o índice do frame atual aqui (ex: _currentFrame = 0).
+                // Caso vá desenhar tudo de uma vez em loop while, utilize a estrutura abaixo:
+                
+                // Exemplo rodando em loop contínuo até que _currentAnim mude ou pare:
+                while (_currentAnim == GifID::BOOT) {
+                    for (int f = 0; f < PS1_STARTUP_TOTAL_FRAMES; f++) {
+                        // Verifica se houve comando de stop durante a animação
+                        if (_currentAnim != GifID::BOOT) break;
+
+                        _tft.startWrite();
+                        
+                        // Desenha o frame atual (240x240 pixels)
+                        int totalPixels = 240 * 240;
+                        for (int i = 0; i < totalPixels; i++) {
+                            int x = (i % 240);
+                            int y = (i / 240);
+                            
+                            // Lê o pixel da memória flash (PROGMEM) usando pgm_read_word
+                            uint16_t color = pgm_read_word(&PS1_Startup_Frames[f][i]);
+                            color = __builtin_bswap16(color); // Ajuste de endianness se necessário
+                            
+                            _tft.drawPixel(x, y, color);
+                        }
+                        
+                        _tft.endWrite();
+                        
+                        // Opcional: controle de FPS / atraso entre os quadros (ex: 33ms para ~30fps)
+                        // delay(33); 
+                    }
+                }
+            }
+            return true;
+            break;
+```

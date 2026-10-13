@@ -1,6 +1,12 @@
 #ifndef ANIMATIONS_H
 #define ANIMATIONS_H
 
+#if defined(ESP8266)
+  #include <ESP8266WiFi.h>
+#elif defined(ESP32)
+  #include <WiFi.h>
+#endif
+
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <AnimatedGIF.h>
@@ -12,7 +18,8 @@ enum class GifID {
     NOT_WIFI,   
     NOT_WORKER, 
     BUG_FRAME,  
-    STANDBY     
+    STANDBY,
+    FORA_DO_AR     
 };
 
 class Animations {
@@ -33,7 +40,9 @@ public:
     bool isActive() const { return _currentAnim != GifID::NONE; }
     GifID getCurrentAnimation() const { return _currentAnim; }
 
+    //GIFs LIST
     void testRedScreen();
+    void foraDoAr();
 
 private:
     TFT_eSPI& _tft;
@@ -41,6 +50,10 @@ private:
     bool _isPlaying = false;
     bool _isTestMode = false;
     bool _inStop = false; // Trava contra recursao infinita
+    
+    // Flag de controle local simples para gerenciar o estado da animação
+    volatile bool _rodarForaDoAr = false;
+
     GifID _currentAnim = GifID::NONE;
     std::function<void()> _onEndCallback = nullptr;
 

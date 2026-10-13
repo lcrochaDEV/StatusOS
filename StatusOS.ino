@@ -65,6 +65,8 @@ void setup() {
     anim.onAnimationEnd([]() {
         lv_obj_invalidate(lv_scr_act());
     });
+    // INICIA A ANIMAÇÃO DE BOOT IMEDIATAMENTE NA TELA
+    anim.playAnimation(GifID::BOOT);
     
     create_dashboard_ui(); // 1. Constrói a interface do Dashboard no LVGL
     setup_web_server();    // 2. Inicia o servidor web                                      

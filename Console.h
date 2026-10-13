@@ -34,6 +34,7 @@ class Console: public WifiConnect {
     bool _event_brilho = false;
     bool _event_popup = false;
     bool _redteste_event = false;
+    bool _foradoar = false;
     Animations* _anim = nullptr; // Ponteiro interno para controle de animação
     
     void commands_envio(const String& command);

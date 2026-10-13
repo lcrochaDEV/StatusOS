@@ -170,7 +170,6 @@ void Console::commands_envio(const String& command) {
       menssageViewMsg("[Console] Uso: SETBRIGHT <0-100> (Ex: SETBRIGHT 80)");
     }
   }
-  
   // COMANDOS DE ACIONAMENTO DE ANIMAÇÕES
   else if (cmd == "PS1" || (cmd == "ANIMACAO" && (paramStr == "BOOT" || paramStr == "PS1"))) {
     if (_anim != nullptr) {
@@ -200,6 +199,7 @@ void Console::commands_envio(const String& command) {
       menssageViewMsg("[Console] Executando teste: Tela Vermelha...");
       (!_redteste_event) ? _anim->testRedScreen() : _anim->stop(); // Executa o teste na classe Animations
       _redteste_event = !_redteste_event; 
+      
     } else {
       menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
     }
@@ -214,6 +214,21 @@ void Console::commands_envio(const String& command) {
     } else {
       menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
     }
+    printPrompt();
+  }
+  
+  else if (cmd == "FORADOAR" || cmd == "FORADOAR" || cmd == "FORADOAR") {
+    if (_anim != nullptr) {
+      menssageViewMsg("[Console] Executando animação Fora do Ar...");
+      (!_foradoar) ? _anim->foraDoAr() : _anim->stop(); // Executa o teste na classe Animations
+      _foradoar = !_foradoar; 
+    } else {
+      menssageViewMsg("[Console] Erro: Ponteiro de Animação não registrado.");
+    }
+    printPrompt();
+  }
+  else {
+    menssageViewMsg("[Console] Comando não reconhecido. Digite HELP para ver a lista de comandos.");
     printPrompt();
   }
 }
