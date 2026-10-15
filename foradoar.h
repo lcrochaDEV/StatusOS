@@ -14430,6 +14430,8 @@ const uint16_t frame_2_delay_0_1s[320 * 240] PROGMEM = {
 };
 
 // 3 frames
-const uint16_t* const tft_image_frames[3] PROGMEM = {
-  frame_1_delay_0_1s, frame_0_delay_0_1s, frame_2_delay_0_1s
+const uint16_t* const tft_image_frames[] PROGMEM = {
+    frame_0_delay_0_1s, 
+    frame_1_delay_0_1s, 
+    frame_2_delay_0_1s
 };

@@ -5,72 +5,130 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
-#include <vector>
+#include <Preferences.h>
+#include <functional>
+#include <mutex>
+#include "SecurityConfig.h"
 #include "ui_dashboard.h"
 #include "index_html.h"
 #include "config_html.h"
+#include "TelemetryData.h"
+#include "TelemetryParser.h"
+#include "Hours_Time.h"
 
-#include "physicalAccessControl.h"
-PhysicalAccessControl physicalAccessControl; 
-
-// Estrutura para os Discos Físicos Individuais (hardware_discos)
-struct DiskInfo {
-    char device[32] = "";
-    char model[64] = "Desconhecido";
-    uint64_t total_bytes = 0;
-    uint64_t usado_bytes = 0;
-    uint64_t livre_bytes = 0;
-    char health_status[16] = "UNKNOWN";
-};
-
-// Estrutura de Telemetria mantendo DADOS BRUTOS (raw data)
-struct TelemetryData {
-    char id[64] = "N/A";
-    char ip[64] = "0.0.0.0";
-    char mac[64] = "00:00:00:00:00:00";
-    char host[128] = "Desconhecido";
-    char os_name[128] = "Linux/Windows";
-    char kernel[128] = "N/A";
-    char uptime[64] = "--:--";
-    float temp = 0.0f;
-    char logo_url[256] = "";
-    float cpu_load = 0.0f;
-    
-    // Dados Brutos em Bytes
-    uint64_t ram_total_bytes = 0;
-    uint64_t ram_used_bytes  = 0;
-    uint64_t disk_total_bytes = 0;
-    uint64_t disk_used_bytes  = 0;
-    
-    // Lista de Discos Físicos do Sistema
-    std::vector<DiskInfo> hardware_discos;
-
-    bool online = false;
-    volatile bool updated = false;
-    char datetime[64] = "";
-    uint64_t epoch_timestamp = 0;
-    uint32_t last_seen_ms = 0;
-};
-
-inline TelemetryData g_telemetry;
-inline std::vector<TelemetryData> g_telemetry_list;
-
-// Controle do carrossel do display
-inline size_t g_current_display_index = 0;
-inline uint32_t g_last_host_switch_ms = 0;
-const uint32_t DISPLAY_ROTATION_INTERVAL_MS = 90000;
+#include "PhysicalAccessControl.h"
+inline PhysicalAccessControl physicalAccessControl;
 
 inline AsyncWebServer server(80);
 inline AsyncWebSocket ws("/ws");
 
-inline bool g_webserver_state = true;
+inline volatile bool g_webserver_state = true;
 inline String g_wake_up_time = "07:00";
 inline String g_sleep_time = "22:00";
 
-String processor(const String& var);
+// Alterações de configuração recebidas em /api/config são aplicadas na task principal (process_web_server_tasks)
+inline volatile bool g_config_dirty = false;
 
-String processor(const String& var) {
-    if(var == "SSID_VALUE") return (WiFi.status() == WL_CONNECTED) ? WiFi.SSID() : "Desconectado";
+constexpr const char* PREFS_NAMESPACE = "statusos";
+
+// --------------------------------------------------
+// Persistência (NVS)
+// --------------------------------------------------
+inline void load_config_from_nvs() {
+    Preferences preferences;
+    if (!preferences.begin(PREFS_NAMESPACE, true)) return;
+
+    g_webserver_state = preferences.getBool("webserver", g_webserver_state);
+    String wake = preferences.getString("wake", g_wake_up_time);
+    String sleep = preferences.getString("sleep", g_sleep_time);
+    preferences.end();
+
+    std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+    if (Hours_Time::isValidTimeFormat(wake.c_str())) g_wake_up_time = wake;
+    if (Hours_Time::isValidTimeFormat(sleep.c_str())) g_sleep_time = sleep;
+}
+
+inline void save_config_to_nvs() {
+    Preferences preferences;
+    if (!preferences.begin(PREFS_NAMESPACE, false)) return;
+
+    String wake;
+    String sleep;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+        wake = g_wake_up_time;
+        sleep = g_sleep_time;
+    }
+
+    preferences.putBool("webserver", g_webserver_state);
+    preferences.putString("wake", wake);
+    preferences.putString("sleep", sleep);
+    preferences.end();
+}
+
+// Entrega os horários ao relógio (Hours_Time), que registra a própria instância
+inline void apply_schedule_to_clock(const String& sleep_time, const String& wake_time) {
+    Hours_Time* clock = Hours_Time::instance();
+    if (clock == nullptr) return;
+    clock->setHoursSleep(sleep_time);
+    clock->setHoursWakeon(wake_time);
+}
+
+// --------------------------------------------------
+// Utilitários HTTP
+// --------------------------------------------------
+// Escapa texto que será inserido no HTML (ex.: SSID controlado por terceiros)
+inline String html_escape(const String& raw) {
+    String out;
+    out.reserve(raw.length() + 8);
+    for (size_t i = 0; i < raw.length(); i++) {
+        char c = raw[i];
+        if (c == '&') out += "&amp;";
+        else if (c == '<') out += "&lt;";
+        else if (c == '>') out += "&gt;";
+        else if (c == '"') out += "&quot;";
+        else if (c == '\'') out += "&#39;";
+        else out += c;
+    }
+    return out;
+}
+
+// Token opcional (SecurityConfig.h): vazio = autenticação desativada
+inline bool is_authorized(AsyncWebServerRequest *request) {
+    if (strlen(API_TOKEN) == 0) return true;
+    if (!request->hasHeader("X-Auth-Token")) return false;
+    return request->header("X-Auth-Token").equals(API_TOKEN);
+}
+
+enum class BodyState { Incomplete, Complete, Rejected };
+
+// Acumula o corpo da requisição (que pode chegar fragmentado) em request->_tempObject.
+// Responde 413/500 no primeiro fragmento quando o corpo é recusado.
+inline BodyState accumulate_body(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (total == 0 || total > MAX_BODY_BYTES) {
+        if (index == 0) request->send(413, "application/json", "{\"status\":\"error\",\"message\":\"Payload muito grande\"}");
+        return BodyState::Rejected;
+    }
+
+    if (index == 0) {
+        request->_tempObject = malloc(total + 1);
+        if (request->_tempObject == nullptr) {
+            request->send(500, "application/json", "{\"status\":\"error\",\"message\":\"Memoria insuficiente\"}");
+            return BodyState::Rejected;
+        }
+    }
+
+    if (request->_tempObject == nullptr || index + len > total) return BodyState::Rejected;
+
+    memcpy((uint8_t*)request->_tempObject + index, data, len);
+    if (index + len < total) return BodyState::Incomplete;
+
+    ((uint8_t*)request->_tempObject)[total] = '\0';
+    return BodyState::Complete;
+}
+
+inline String processor(const String& var) {
+    if(var == "SSID_VALUE") return (WiFi.status() == WL_CONNECTED) ? html_escape(WiFi.SSID()) : String("Desconectado");
     if(var == "IP_VALUE")   return (WiFi.status() == WL_CONNECTED) ? WiFi.localIP().toString() : "0.0.0.0";
     if(var == "MAC_VALUE")  return WiFi.macAddress();
 
@@ -80,243 +138,119 @@ String processor(const String& var) {
     if (var == "MENOR_RAM_SIZE_VALUE") return String((uint32_t)physicalAccessControl.min_free_ram_kb()) + " KB";
     if (var == "SKETCH_SIZE_VALUE")    return String((uint32_t)physicalAccessControl.sketch_size_kb()) + " KB";
     if(var == "WEBSERVER_STATE") return g_webserver_state ? "checked" : "";
-    if(var == "WAKE_TIME_VALUE") return g_wake_up_time;
-    if(var == "SLEEP_TIME_VALUE") return g_sleep_time;
-    
+
+    if(var == "WAKE_TIME_VALUE" || var == "SLEEP_TIME_VALUE") {
+        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+        return (var == "WAKE_TIME_VALUE") ? g_wake_up_time : g_sleep_time;
+    }
+
     return String("");
 }
 
-void handleDateTime(AsyncWebServerRequest *request) {
-    time_t now = time(nullptr); 
+inline void handleDateTime(AsyncWebServerRequest *request) {
+    time_t now = time(nullptr);
+
+    // Antes da primeira sincronização NTP o relógio fica próximo de 1970
+    if (now < 1700000000) {
+        request->send(200, "application/json", "{\"date\":\"--/--/----\",\"time\":\"--:--:--\",\"synced\":false}");
+        return;
+    }
+
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
-    
-    char dateString[11]; 
-    char hourString[9]; 
+
+    char dateString[11];
+    char hourString[9];
 
     strftime(dateString, sizeof(dateString), "%d/%m/%Y", &timeinfo);
     strftime(hourString, sizeof(hourString), "%H:%M:%S", &timeinfo);
-    
+
     String responseJson = "{\"date\":\"";
     responseJson += dateString;
     responseJson += "\",\"time\":\"";
     responseJson += hourString;
-    responseJson += "\"}";
+    responseJson += "\",\"synced\":true}";
 
     request->send(200, "application/json", responseJson);
 }
 
-inline TelemetryData* get_or_create_host(const char* id_or_name) {
-    for (auto& item : g_telemetry_list) {
-        if (strcmp(item.id, id_or_name) == 0 || strcmp(item.host, id_or_name) == 0) {
-            return &item;
-        }
-    }
-    TelemetryData new_host;
-    strncpy(new_host.id, id_or_name, sizeof(new_host.id) - 1);
-    strncpy(new_host.host, id_or_name, sizeof(new_host.host) - 1);
-    g_telemetry_list.push_back(new_host);
-    return &g_telemetry_list.back();
-}
-
-inline String build_json_string() {
-    JsonDocument doc;
-    JsonArray hostsArray = doc.to<JsonArray>();
-
-    for (const auto& item : g_telemetry_list) {
-        JsonObject obj = hostsArray.add<JsonObject>();
-        obj["id"] = item.id;
-        obj["ip"] = item.ip;
-        obj["mac"] = item.mac;
-        obj["host"] = item.host;
-        obj["datetime"] = item.datetime;
-        obj["epoch_timestamp"] = item.epoch_timestamp;
-        obj["uptime"] = item.uptime;
-        obj["os_name"] = item.os_name;
-        obj["kernel"] = item.kernel;
-        obj["temp"] = item.temp;
-        obj["cpu_load"] = item.cpu_load;
-        
-        obj["ram_total_bytes"]  = item.ram_total_bytes;
-        obj["ram_used_bytes"]   = item.ram_used_bytes;
-        obj["disk_total_bytes"] = item.disk_total_bytes;
-        obj["disk_used_bytes"]  = item.disk_used_bytes;
-        
-        JsonObject metricasObj = obj["metricas"].to<JsonObject>();
-        metricasObj["cpu_temp"] = item.temp;
-        metricasObj["cpu_load_1m"] = item.cpu_load;
-
-        JsonObject memObj = metricasObj["memoria"].to<JsonObject>();
-        memObj["total_bytes"] = item.ram_total_bytes;
-        memObj["usada_bytes"] = item.ram_used_bytes;
-
-        JsonObject diskObj = metricasObj["disco"].to<JsonObject>();
-        diskObj["total_bytes"] = item.disk_total_bytes;
-        diskObj["usado_bytes"] = item.disk_used_bytes;
-
-        JsonArray hwDisksArr = metricasObj["hardware_discos"].to<JsonArray>();
-        for (const auto& d : item.hardware_discos) {
-            JsonObject diskItem = hwDisksArr.add<JsonObject>();
-            diskItem["device"] = d.device;
-            diskItem["model"] = d.model;
-            diskItem["total_bytes"] = d.total_bytes;
-            diskItem["usado_bytes"] = d.usado_bytes;
-            diskItem["livre_bytes"] = d.livre_bytes;
-            diskItem["health_status"] = d.health_status;
-        }
-
-        obj["logo_url"] = item.logo_url;
-        obj["online"]   = item.online;
-    }
-
-    String jsonString;
-    serializeJson(doc, jsonString);
-    return jsonString;
-}
-
+// Atualiza o display (LVGL, somente na task principal) e os clientes WebSocket
 inline void update_display_and_ws() {
+    static TelemetryData snapshot;
+    bool refresh_display;
+    bool refresh_ws;
+
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+        refresh_display = g_telemetry.updated;
+        refresh_ws = g_ws_dirty;
+        g_telemetry.updated = false;
+        g_ws_dirty = false;
+        if (refresh_display) copy_display_fields(snapshot, g_telemetry);
+    }
+
+    if (refresh_ws && ws.count() > 0) {
+        if (ws.availableForWriteAll()) ws.textAll(build_json_string());
+        else g_ws_dirty = true; // Fila cheia: tenta de novo no próximo ciclo
+    }
+
+    if (!refresh_display) return;
+
     // Alinhamento exato de arredondamento com o JavaScript (Math.round)
-    int ram_pct = (g_telemetry.ram_total_bytes > 0) 
-        ? (int)(((g_telemetry.ram_used_bytes * 100ULL) + (g_telemetry.ram_total_bytes / 2ULL)) / g_telemetry.ram_total_bytes) 
+    int ram_pct = (snapshot.ram_total_bytes > 0)
+        ? (int)(((snapshot.ram_used_bytes * 100ULL) + (snapshot.ram_total_bytes / 2ULL)) / snapshot.ram_total_bytes)
         : 0;
 
-    int disk_pct = (g_telemetry.disk_total_bytes > 0) 
-        ? (int)(((g_telemetry.disk_used_bytes * 100ULL) + (g_telemetry.disk_total_bytes / 2ULL)) / g_telemetry.disk_total_bytes) 
+    int disk_pct = (snapshot.disk_total_bytes > 0)
+        ? (int)(((snapshot.disk_used_bytes * 100ULL) + (snapshot.disk_total_bytes / 2ULL)) / snapshot.disk_total_bytes)
         : 0;
-
-    if (ws.count() > 0 && ws.availableForWriteAll()) ws.textAll(build_json_string());
 
     update_telemetry_data(
-        g_telemetry.host,
-        g_telemetry.os_name,
-        g_telemetry.kernel,
-        g_telemetry.temp,
-        g_telemetry.cpu_load,
+        snapshot.host,
+        snapshot.os_name,
+        snapshot.kernel,
+        snapshot.temp,
+        snapshot.cpu_load,
         ram_pct,
         disk_pct,
-        g_telemetry.uptime,
-        g_telemetry.logo_url
+        snapshot.uptime,
+        snapshot.logo_url,
+        (float)snapshot.cpu_cores
     );
-    update_status(g_telemetry.online);
-}
-inline bool parse_telemetry_json(uint8_t *data, size_t len) {
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, data, len);
-    if (error) return false;
-
-    const char* host_id = "N/A";
-    if (doc["id"].is<const char*>()) host_id = doc["id"];
-    else if (doc["servidor"].is<const char*>()) host_id = doc["servidor"];
-    else if (doc["host"].is<const char*>()) host_id = doc["host"];
-
-    TelemetryData* target_host = get_or_create_host(host_id);
-    target_host->last_seen_ms = millis();
-
-    if (doc["id"].is<const char*>()) strncpy(target_host->id, doc["id"], sizeof(target_host->id) - 1);
-    if (doc["ip"].is<const char*>()) strncpy(target_host->ip, doc["ip"], sizeof(target_host->ip) - 1);
-    if (doc["mac"].is<const char*>()) strncpy(target_host->mac, doc["mac"], sizeof(target_host->mac) - 1);
-
-    if (doc["servidor"].is<const char*>()) strncpy(target_host->host, doc["servidor"], sizeof(target_host->host) - 1);
-    else if (doc["host"].is<const char*>()) strncpy(target_host->host, doc["host"], sizeof(target_host->host) - 1);
-
-    if (doc["datetime"].is<const char*>()) strncpy(target_host->datetime, doc["datetime"], sizeof(target_host->datetime) - 1);
-    if (!doc["epoch_timestamp"].isNull()) target_host->epoch_timestamp = doc["epoch_timestamp"].as<uint64_t>();
-    if (doc["uptime"].is<const char*>()) strncpy(target_host->uptime, doc["uptime"], sizeof(target_host->uptime) - 1);
-    if (doc["logo_url"].is<const char*>()) strncpy(target_host->logo_url, doc["logo_url"], sizeof(target_host->logo_url) - 1);
-
-    if (doc["sistema_operacional"].is<JsonObject>()) {
-        JsonObject so = doc["sistema_operacional"];
-        if (so["nome"].is<const char*>()) strncpy(target_host->os_name, so["nome"], sizeof(target_host->os_name) - 1);
-        if (so["kernel"].is<const char*>()) strncpy(target_host->kernel, so["kernel"], sizeof(target_host->kernel) - 1);
-        if (so["logo_url"].is<const char*>()) strncpy(target_host->logo_url, so["logo_url"], sizeof(target_host->logo_url) - 1);
-    } else {
-        if (doc["os_name"].is<const char*>()) strncpy(target_host->os_name, doc["os_name"], sizeof(target_host->os_name) - 1);
-        if (doc["kernel"].is<const char*>()) strncpy(target_host->kernel, doc["kernel"], sizeof(target_host->kernel) - 1);
-    }
-
-    if (doc["metricas"].is<JsonObject>()) {
-        JsonObject metricas = doc["metricas"];
-        if (!metricas["cpu_temp"].isNull()) target_host->temp = metricas["cpu_temp"].as<float>();
-        if (!metricas["cpu_load_1m"].isNull()) target_host->cpu_load = metricas["cpu_load_1m"].as<float>();
-
-        if (metricas["memoria"].is<JsonObject>()) {
-            JsonObject mem = metricas["memoria"];
-            if (!mem["total_bytes"].isNull()) target_host->ram_total_bytes = mem["total_bytes"].as<uint64_t>();
-            else if (!mem["total_kb"].isNull()) target_host->ram_total_bytes = mem["total_kb"].as<uint64_t>() * 1024ULL;
-            else if (!mem["total_mb"].isNull()) target_host->ram_total_bytes = mem["total_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
-
-            if (!mem["usada_bytes"].isNull()) target_host->ram_used_bytes = mem["usada_bytes"].as<uint64_t>();
-            else if (!mem["usada_kb"].isNull()) target_host->ram_used_bytes = mem["usada_kb"].as<uint64_t>() * 1024ULL;
-            else if (!mem["usada_mb"].isNull()) target_host->ram_used_bytes = mem["usada_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
-        }
-
-        if (metricas["disco"].is<JsonObject>()) {
-            JsonObject dsk = metricas["disco"];
-            if (!dsk["total_bytes"].isNull()) target_host->disk_total_bytes = dsk["total_bytes"].as<uint64_t>();
-            else if (!dsk["total_kb"].isNull()) target_host->disk_total_bytes = dsk["total_kb"].as<uint64_t>() * 1024ULL;
-            else if (!dsk["total_mb"].isNull()) target_host->disk_total_bytes = dsk["total_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
-
-            if (!dsk["usado_bytes"].isNull()) target_host->disk_used_bytes = dsk["usado_bytes"].as<uint64_t>();
-            else if (!dsk["usado_kb"].isNull()) target_host->disk_used_bytes = dsk["usado_kb"].as<uint64_t>() * 1024ULL;
-            else if (!dsk["usado_mb"].isNull()) target_host->disk_used_bytes = dsk["usado_mb"].as<uint64_t>() * 1024ULL * 1024ULL;
-        }
-
-        target_host->hardware_discos.clear();
-        if (metricas["hardware_discos"].is<JsonArray>()) {
-            JsonArray discosArr = metricas["hardware_discos"].as<JsonArray>();
-            for (JsonObject d : discosArr) {
-                DiskInfo disk;
-                if (d["device"].is<const char*>()) strncpy(disk.device, d["device"], sizeof(disk.device) - 1);
-                if (d["model"].is<const char*>()) strncpy(disk.model, d["model"], sizeof(disk.model) - 1);
-                
-                if (!d["total_bytes"].isNull()) disk.total_bytes = d["total_bytes"].as<uint64_t>();
-                else if (!d["size_bytes"].isNull()) disk.total_bytes = d["size_bytes"].as<uint64_t>();
-
-                if (!d["usado_bytes"].isNull()) disk.usado_bytes = d["usado_bytes"].as<uint64_t>();
-                if (!d["livre_bytes"].isNull()) disk.livre_bytes = d["livre_bytes"].as<uint64_t>();
-
-                if (d["health_status"].is<const char*>()) strncpy(disk.health_status, d["health_status"], sizeof(disk.health_status) - 1);
-
-                target_host->hardware_discos.push_back(disk);
-            }
-        }
-    } else {
-        if (!doc["temp"].isNull()) target_host->temp = doc["temp"].as<float>();
-        if (!doc["cpu_load"].isNull()) target_host->cpu_load = doc["cpu_load"].as<float>();
-
-        if (!doc["ram_total_bytes"].isNull()) target_host->ram_total_bytes = doc["ram_total_bytes"].as<uint64_t>();
-        else if (!doc["ram_total_kb"].isNull()) target_host->ram_total_bytes = doc["ram_total_kb"].as<uint64_t>() * 1024ULL;
-        
-        if (!doc["ram_used_bytes"].isNull()) target_host->ram_used_bytes = doc["ram_used_bytes"].as<uint64_t>();
-        else if (!doc["ram_used_kb"].isNull()) target_host->ram_used_bytes = doc["ram_used_kb"].as<uint64_t>() * 1024ULL;
-
-        if (!doc["disk_total_bytes"].isNull()) target_host->disk_total_bytes = doc["disk_total_bytes"].as<uint64_t>();
-        else if (!doc["disk_total_kb"].isNull()) target_host->disk_total_bytes = doc["disk_total_kb"].as<uint64_t>() * 1024ULL;
-
-        if (!doc["disk_used_bytes"].isNull()) target_host->disk_used_bytes = doc["disk_used_bytes"].as<uint64_t>();
-        else if (!doc["disk_used_kb"].isNull()) target_host->disk_used_bytes = doc["disk_used_kb"].as<uint64_t>() * 1024ULL;
-    }
-
-    target_host->online = true;
-    target_host->updated = true;
-
-    if (g_telemetry_list.size() == 1) {
-        g_telemetry = *target_host;
-        g_telemetry.updated = true;
-    }
-
-    return true;
+    update_status(snapshot.online);
 }
 
-inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client, 
+inline bool parse_and_reply(AsyncWebServerRequest *request, size_t total) {
+    ParseResult result = parse_telemetry_json_ex((uint8_t*)request->_tempObject, total);
+
+    switch (result) {
+        case ParseResult::Ok:
+            request->send(200, "application/json", "{\"status\":\"sucess\"}");
+            return true;
+        case ParseResult::HostLimit:
+            request->send(507, "application/json", "{\"status\":\"error\",\"message\":\"Limite de hosts atingido\"}");
+            return false;
+        case ParseResult::InvalidId:
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"ID invalido\"}");
+            return false;
+        default:
+            request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
+            return false;
+    }
+}
+
+inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client,
                         AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (!g_webserver_state) return;
 
     if (type == WS_EVT_CONNECT) {
         client->text(build_json_string());
     } else if (type == WS_EVT_DATA) {
+        // Com token configurado, a escrita só é aceita via HTTP autenticado
+        if (strlen(API_TOKEN) != 0) return;
+
         AwsFrameInfo *info = (AwsFrameInfo*)arg;
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT && len <= MAX_BODY_BYTES) {
             parse_telemetry_json(data, len);
         }
     }
@@ -330,24 +264,38 @@ inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data,
         return;
     }
 
-    if (index + len < total) return;
+    if (!is_authorized(request)) {
+        if (index == 0) request->send(401, "application/json", "{\"status\":\"error\",\"message\":\"Nao autorizado\"}");
+        return;
+    }
 
-    if (!parse_telemetry_json(data, len)) {
+    if (accumulate_body(request, data, len, index, total) != BodyState::Complete) return;
+
+    parse_and_reply(request, total);
+}
+
+inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!is_authorized(request)) {
+        if (index == 0) request->send(401, "application/json", "{\"status\":\"error\",\"message\":\"Nao autorizado\"}");
+        return;
+    }
+
+    if (accumulate_body(request, data, len, index, total) != BodyState::Complete) return;
+
+    JsonDocument doc;
+    DeserializationError error = deserializeJson(doc, (uint8_t*)request->_tempObject, total);
+
+    if (error) {
         request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
         return;
     }
 
-    request->send(200, "application/json", "{\"status\":\"sucess\"}");
-}
-
-inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-    if (index + len < total) return;
-
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, data, len);
-
-    if (error) {
-        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
+    // Valida tudo antes de aplicar qualquer alteração
+    bool has_wake = doc["wake_time"].is<const char*>();
+    bool has_sleep = doc["sleep_time"].is<const char*>();
+    if ((has_wake && !Hours_Time::isValidTimeFormat(doc["wake_time"].as<const char*>())) ||
+        (has_sleep && !Hours_Time::isValidTimeFormat(doc["sleep_time"].as<const char*>()))) {
+        request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Horario invalido (use HH:MM)\"}");
         return;
     }
 
@@ -361,16 +309,33 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
         }
     }
 
-    if (doc["wake_time"].is<const char*>()) g_wake_up_time = doc["wake_time"].as<String>();
-    if (doc["sleep_time"].is<const char*>()) g_sleep_time = doc["sleep_time"].as<String>();
+    if (has_wake || has_sleep) {
+        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+        if (has_wake) g_wake_up_time = doc["wake_time"].as<String>();
+        if (has_sleep) g_sleep_time = doc["sleep_time"].as<String>();
+    }
+
+    g_config_dirty = true; // Aplicado e persistido na task principal
 
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
 }
 
 inline void setup_web_server() {
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    // Horários: valores do relógio -> sobrescritos pelos salvos na NVS -> devolvidos ao relógio
+    Hours_Time* clock = Hours_Time::instance();
+    if (clock != nullptr) {
+        g_wake_up_time = clock->getHoursWakeon();
+        g_sleep_time = clock->getHoursSleep();
+    }
+    load_config_from_nvs();
+    apply_schedule_to_clock(g_sleep_time, g_wake_up_time);
+
+    // CORS só é habilitado quando uma origem é definida em CORS_ALLOW_ORIGIN (SecurityConfig.h)
+    if (strlen(CORS_ALLOW_ORIGIN) > 0) {
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", CORS_ALLOW_ORIGIN);
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Auth-Token");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    }
 
     ws.onEvent(on_ws_event);
     server.addHandler(&ws);
@@ -381,7 +346,7 @@ inline void setup_web_server() {
 
     server.on("/dashboard", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!g_webserver_state) {
-            request->send(503, "text/html", 
+            request->send(503, "text/html",
                 "<html><head><meta charset='UTF-8'></head><body style='background:#0a0413;color:#fff;font-family:sans-serif;text-align:center;padding-top:100px;'>"
                 "<h1>Serviço em Pausa</h1>"
                 "<p>A telemetria do dashboard está temporariamente desativada.</p>"
@@ -390,10 +355,10 @@ inline void setup_web_server() {
             );
             return;
         }
-        request->send(200, "text/html", index_html);
+        request->send_P(200, "text/html", index_html); // Transmite direto da flash, sem copiar para o heap
     });
 
-    server.on("/datetime", HTTP_GET, handleDateTime); 
+    server.on("/datetime", HTTP_GET, handleDateTime);
 
     server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/html", config_html, processor);
@@ -411,8 +376,13 @@ inline void setup_web_server() {
     server.on("/api/telemetry", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
     server.on("/api/config", HTTP_OPTIONS, [](AsyncWebServerRequest *request) { request->send(200); });
 
-    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, handle_post_telemetry);
-    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {}, NULL, handle_post_config);
+    // Requisições sem corpo não passam pelo handler de body: respondem aqui para não ficarem penduradas
+    server.on("/api/telemetry", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->contentLength() == 0) request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Corpo vazio\"}");
+    }, NULL, handle_post_telemetry);
+    server.on("/api/config", HTTP_POST, [](AsyncWebServerRequest *request) {
+        if (request->contentLength() == 0) request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"Corpo vazio\"}");
+    }, NULL, handle_post_config);
 
     server.begin();
     Serial.println("Servidor HTTP Async Iniciado!");
@@ -421,48 +391,76 @@ inline void setup_web_server() {
 inline void process_web_server_tasks() {
     ws.cleanupClients();
 
+    // Aplica na task principal as alterações de /api/config (evita corrida com Hours_Time)
+    if (g_config_dirty) {
+        g_config_dirty = false;
+
+        String sleep_time;
+        String wake_time;
+        {
+            std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
+            sleep_time = g_sleep_time;
+            wake_time = g_wake_up_time;
+        }
+
+        apply_schedule_to_clock(sleep_time, wake_time);
+        save_config_to_nvs();
+    }
+
     if (!g_webserver_state) return;
 
     uint32_t now = millis();
     static uint32_t last_ws_send_ms = 0;
 
-    if (!g_telemetry_list.empty()) {
-        uint32_t timeout_threshold_ms = DISPLAY_ROTATION_INTERVAL_MS * 2 * g_telemetry_list.size();
-        bool list_changed = false;
+    {
+        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
 
-        for (auto it = g_telemetry_list.begin(); it != g_telemetry_list.end(); ) {
-            if (now - it->last_seen_ms > timeout_threshold_ms) {
-                it = g_telemetry_list.erase(it);
-                list_changed = true;
-            } else {
-                ++it;
+        if (!g_telemetry_list.empty()) {
+            uint32_t timeout_threshold_ms = DISPLAY_ROTATION_INTERVAL_MS * 2 * g_telemetry_list.size();
+            bool list_changed = false;
+
+            for (auto it = g_telemetry_list.begin(); it != g_telemetry_list.end(); ) {
+                uint32_t age_ms = now - it->last_seen_ms;
+
+                if (age_ms > timeout_threshold_ms) {
+                    it = g_telemetry_list.erase(it);
+                    list_changed = true;
+                } else {
+                    // Sem payload recente: marca como offline antes de remover da lista
+                    if (it->online && age_ms > HOST_OFFLINE_TIMEOUT_MS) {
+                        it->online = false;
+                        list_changed = true;
+                    }
+                    ++it;
+                }
+            }
+
+            if (list_changed) {
+                invalidate_json_cache();
+
+                if (g_telemetry_list.empty()) {
+                    g_current_display_index = 0;
+                    g_telemetry = TelemetryData();
+                    g_telemetry.updated = true;
+                } else {
+                    if (g_current_display_index >= g_telemetry_list.size()) g_current_display_index = 0;
+                    copy_display_fields(g_telemetry, g_telemetry_list[g_current_display_index]);
+                    g_telemetry.updated = true;
+                }
             }
         }
 
-        if (list_changed) {
-            if (g_telemetry_list.empty()) {
-                g_current_display_index = 0;
-                g_telemetry = TelemetryData();
-                g_telemetry.updated = true;
-            } else {
-                if (g_current_display_index >= g_telemetry_list.size()) g_current_display_index = 0;
-                g_telemetry = g_telemetry_list[g_current_display_index];
+        if (!g_telemetry_list.empty()) {
+            if (now - g_last_host_switch_ms >= DISPLAY_ROTATION_INTERVAL_MS) {
+                g_last_host_switch_ms = now;
+                g_current_display_index = (g_current_display_index + 1) % g_telemetry_list.size();
+                copy_display_fields(g_telemetry, g_telemetry_list[g_current_display_index]);
                 g_telemetry.updated = true;
             }
         }
     }
 
-    if (!g_telemetry_list.empty()) {
-        if (now - g_last_host_switch_ms >= DISPLAY_ROTATION_INTERVAL_MS) {
-            g_last_host_switch_ms = now;
-            g_current_display_index = (g_current_display_index + 1) % g_telemetry_list.size();
-            g_telemetry = g_telemetry_list[g_current_display_index];
-            g_telemetry.updated = true;
-        }
-    }
-
-    if (g_telemetry.updated && (now - last_ws_send_ms >= 500)) {
-        g_telemetry.updated = false;
+    if ((g_telemetry.updated || g_ws_dirty) && (now - last_ws_send_ms >= WS_SEND_INTERVAL_MS)) {
         last_ws_send_ms = now;
         update_display_and_ws();
     }

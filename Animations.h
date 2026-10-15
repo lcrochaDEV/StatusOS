@@ -1,48 +1,36 @@
 #ifndef ANIMATIONS_H
 #define ANIMATIONS_H
 
-#if defined(ESP8266)
-  #include <ESP8266WiFi.h>
-#elif defined(ESP32)
-  #include <WiFi.h>
-#endif
-
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <AnimatedGIF.h>
 #include <functional>
+#include "ConsoleDependencies.h"
 
-enum class GifID {
-    NONE,
-    BOOT,       
-    NOT_WIFI,   
-    NOT_WORKER, 
-    BUG_FRAME,  
-    STANDBY,
-    FORA_DO_AR     
-};
-
-class Animations {
+class Animations: public IAnimationControl {
 public:
     explicit Animations(TFT_eSPI& tft);
-    ~Animations();
+    ~Animations() override;
 
     void begin();
     void update(); 
 
-    bool playAnimation(GifID animType);
+    bool playAnimation(GifID animType) override;
     bool playGif(const uint8_t* gifData, size_t gifSize);
-    void stop();
+    void stop() override;
 
     void onAnimationEnd(std::function<void()> callback);
 
-    bool isPlaying() const { return _isPlaying || _isTestMode; }
+    // Condições (injetada) que encerram a tela de boot, ex.: WI-FI conectado. sem condições, o boot só termina via stop() ou playAnimation(GifID::NONE)
+    void setBootExitCondition(std::function<bool()> conditions);
+
+    bool isPlaying() const override { return _isPlaying || _isTestMode; }
     bool isActive() const { return _currentAnim != GifID::NONE; }
-    GifID getCurrentAnimation() const { return _currentAnim; }
+    GifID getCurrentAnimation() const override { return _currentAnim; }
 
     //GIFs LIST
-    void testRedScreen();
-    void foraDoAr();
+    void testRedScreen() override;
+    void foraDoAr() override;
 
 private:
     TFT_eSPI& _tft;
@@ -51,15 +39,25 @@ private:
     bool _isTestMode = false;
     bool _inStop = false; // Trava contra recursao infinita
     
-    // Flag de controle local simples para gerenciar o estado da animação
-    volatile bool _rodarForaDoAr = false;
-
     GifID _currentAnim = GifID::NONE;
     std::function<void()> _onEndCallback = nullptr;
+    std::function<bool()> _bootExitCondition = nullptr;
 
+    //Temporização não bloqueante
+    uint32_t _nextGifFrameMs = 0;
+    uint32_t _bootStartMs = 0;
+    uint32_t _foraStartMs = 0;
+    uint32_t _foraLastFrameMs = 0;
+    int _foraFrame = 0;
+    int _foraTotalFrames = 0;
+
+    // Flag de controle local simples para gerenciar o estado da animação
+    unsigned long _animTimer = 0;
+    unsigned long _frameTimer = 0;
+    int _frameIndex = 0;
+
+    void atualizarForaDoAr();
     static void GIFDraw(GIFDRAW *pDraw);
-    static void animationTask(void* pvParameters); // Task interna
-    TaskHandle_t _taskHandle = nullptr;
 };
 
 #endif // ANIMATIONS_H

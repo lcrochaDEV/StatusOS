@@ -12,7 +12,7 @@ Display::~Display() {
     }
 }
 
-IRAM_ATTR void Display::my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
+void Display::my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
     Display *self = static_cast<Display *>(lv_display_get_user_data(disp));
     if (!self) return;
 
@@ -84,17 +84,18 @@ void Display::setBrightness(uint8_t val) {
 
 // Efeito Gradual: Clareia ou Escurece até o valor desejado
 void Display::fadeTo(uint8_t targetValue, uint16_t durationMs) {
+    _currentBrightness = g_file_system_ctrl.obterPwm(); // O brilho pode ter sido alterado pela UI/Console
     if (targetValue == _currentBrightness) return;
 
     int steps = abs(targetValue - _currentBrightness);
     if (steps == 0) return;
 
     int stepDelay = durationMs / steps;
+    if (stepDelay < 1) stepDelay = 1;
     int stepDirection = (targetValue > _currentBrightness) ? 1 : -1;
 
     while (_currentBrightness != targetValue) {
-        _currentBrightness += stepDirection;
-        analogWrite(_backlightPin, _currentBrightness);
+        setBrightness(static_cast<uint8_t>(_currentBrightness + stepDirection));
         delay(stepDelay);
     }
 }

@@ -4,6 +4,7 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <lvgl.h>
+#include "FileSystemControll.h"
 
 class Display {
 public:
@@ -33,7 +34,7 @@ private:
     uint8_t _currentBrightness;
 
     static const size_t DRAW_BUF_SIZE = (320 * 10 * sizeof(uint16_t));
-    static void IRAM_ATTR my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map);
+    static void my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map);
 };
 
 #endif // DISPLAY_H

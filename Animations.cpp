@@ -1,8 +1,18 @@
 #include "Animations.h"
+
+#if defined(ESP8266)
+  #include <ESP8266WiFi.h>
+#elif defined(ESP32)
+  #include <WiFi.h>
+#endif
 #include "PS1_Startup.h"
-#include "foradoaro.h"
+#include "foradoar.h"
 
 static TFT_eSPI* pTftInstance = nullptr;
+
+static constexpr uint32_t MIN_FREE_HEAP_GIF_BYTES = 20000;
+static constexpr uint32_t FORA_DO_AR_FRAME_MS = 50;
+static constexpr uint32_t BOOT_TIMEOUT_MS = 15000; 
 
 Animations::Animations(TFT_eSPI& tft)
     : _tft(tft), _gif(nullptr), _isPlaying(false), _isTestMode(false), 
@@ -16,10 +26,20 @@ Animations::~Animations() {
     }
 }
 
-void Animations::begin() {  pTftInstance = &_tft;   }
+void Animations::begin() {
+    pTftInstance = &_tft;
+
+    // Condição padrão para encerrar a tela de boot: Wi-Fi conectado (substituível por setBootExitCondition)
+    if (!_bootExitCondition) _bootExitCondition = []() { return WiFi.status() == WL_CONNECTED; };
+}
+
 
 void Animations::onAnimationEnd(std::function<void()> callback) {
     _onEndCallback = callback;
+}
+
+void Animations::setBootExitCondition(std::function<bool()> condition) {
+    _bootExitCondition = condition;
 }
 
 bool Animations::playAnimation(GifID animType) {
@@ -45,6 +65,7 @@ bool Animations::playAnimation(GifID animType) {
                 stop();
                 _currentAnim = GifID::BOOT;
                 _isTestMode = true; 
+                _bootStartMs = millis();
                 
                 _tft.startWrite();
                 // Processa linha por linha (320 pixels por vez) para corrigir as cores
@@ -118,6 +139,7 @@ bool Animations::playGif(const uint8_t* gifData, size_t gifSize) {
     if (_gif->open((uint8_t*)gifData, gifSize, GIFDraw)) {
         _gif->setDrawType(GIF_DRAW_COOKED);
         _isPlaying = true;
+        _nextGifFrameMs = 0;
         return true;
     }
 
@@ -131,10 +153,15 @@ void Animations::update() {
         // Exemplo: se estiver no modo boot, podemos checar a internet aqui de forma não bloqueante
         if (_currentAnim == GifID::BOOT) {
             // Supondo que você tenha acesso ao status do Wi-Fi aqui ou uma flag:
-            if (WiFi.status() == WL_CONNECTED) {
+            if (_bootExitCondition && _bootExitCondition()) {
                 Serial.println("[Boot] Internet conectada! Encerrando tela de boot...");
                 stop(); // Isso vai parar o boot, limpar o estado e disparar o callback para o dashboard
+            } else if (millis() - _bootStartMs >= BOOT_TIMEOUT_MS) {
+                Serial.println("[Boot] Tempo limite da tela de boot. Seguindo para o Dashboard...");
+                stop();
             }
+        } else if (_currentAnim == GifID::FORA_DO_AR) {
+            atualizarForaDoAr();
         }
         
         yield(); // Libera ciclos de CPU para o servidor Web HTTP
@@ -143,9 +170,21 @@ void Animations::update() {
 
     if (!_isPlaying || !_gif) return;
 
+    // Respeita o atraso do quadro anterior sem bloquear o loop
+    if (static_cast<int32_t>(millis() - _nextGifFrameMs) < 0) {
+        yield();
+        return;
+    }
+
     int delayMs = 0;
-    (!_gif->playFrame(false, &delayMs)) ? stop() : yield(); 
+    if (!_gif->playFrame(false, &delayMs)) {
+        stop();
+    } else {
+        _nextGifFrameMs = millis() + (delayMs > 0 ? (uint32_t)delayMs : 0U);
+        yield();
+    }
 }
+
 
 void Animations::stop() {
     if (_inStop) return;
@@ -188,40 +227,35 @@ void Animations::foraDoAr() {
     stop();
     _currentAnim = GifID::FORA_DO_AR;
     _isTestMode = true; 
-    _tft.setSwapBytes(true); 
 
     // Descobre dinamicamente o total de quadros no seu arquivo .h
-    const int total_frames = sizeof(fora_do_ar) / sizeof(fora_do_ar[0]);
+    _foraTotalFrames = sizeof(tft_image_frames) / sizeof(tft_image_frames[0]);
 
     Serial.println("[Animations] Iniciando loop Fora do Ar por 3 segundos...");
 
     // 2. REGISTRO DO TEMPO INICIAL
-    unsigned long tempo_inicio_animacao = millis();
-    int f = 0; // Índice do frame atual
+    _foraStartMs = millis();
+    _foraLastFrameMs = _foraStartMs - FORA_DO_AR_FRAME_MS; // Força o desenho imediato do primeiro quadro
+    _foraFrame = 0; // Índice do frame atual
+}
 
-    // 3. LOOP SÍNCRONO TEMPORIZADO (Roda rigidamente por 3000ms / 3 segundos)
-    while (millis() - tempo_inicio_animacao < 3000) {
-        
-        // Desenha o frame atual na tela (320x240 pixels)
-        _tft.pushImage(0, 0, 320, 240, fora_do_ar[f]);
-        
-        // Avança cíclica e infinitamente para o próximo quadro da animação
-        f = (f + 1) % total_frames;
+// Avança a animação "Fora do Ar" de forma não bloqueante (chamado por update())
+void Animations::atualizarForaDoAr() {
+    uint32_t agora = millis();
 
-        // Micro-espera interna de 50ms para controlar o FPS de forma não-bloqueante ao chip
-        unsigned long tempo_inicio_frame = millis();
-        while (millis() - tempo_inicio_frame < 50) {
-            yield(); // Alimenta o Watchdog do ESP32 e mantém as conexões de rede ativas
-            
-            // Margem de segurança: interrompe o micro-loop se o tempo total estourar
-            if (millis() - tempo_inicio_animacao >= 30000) break;
-        }
-    }
+    // Micro-espera interna de 50ms para controlar o FPS de forma não-bloqueante ao chip
+    if (agora - _foraLastFrameMs < FORA_DO_AR_FRAME_MS) return;
+    _foraLastFrameMs = agora;
 
-    // 4. AUTO-FINALIZAÇÃO APÓS OS 3 SEGUNDOS
-    stop(); // Limpa as flags da classe de volta ao estado padrão do StatusOS
-    
-    _isTestMode = false;
-    
-    Serial.println("[Animations] 3 segundos concluídos. Animação encerrada e console liberado!");
+    // Desenha o frame atual na tela (320x240 pixels)
+    // O swap de bytes é restaurado para não afetar as demais telas (ex.: BOOT)
+    bool swapAnterior = _tft.getSwapBytes();
+    _tft.setSwapBytes(true); 
+    _tft.pushImage(0, 0, 320, 240, tft_image_frames[_foraFrame]);
+    _tft.setSwapBytes(swapAnterior);
+
+    // Avança cíclica e infinitamente para o próximo quadro da animação
+    _foraFrame = (_foraFrame + 1) % _foraTotalFrames;
+
+    yield(); // Alimenta o Watchdog do ESP32 e mantém as conexões de rede ativas
 }

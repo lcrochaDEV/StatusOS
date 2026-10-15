@@ -2,6 +2,7 @@
 #define WIFICONNECT_H
 
 #include <Arduino.h>
+#include "SecurityConfig.h"
 
 #if defined(ESP8266)
   #include <ESP8266WiFi.h>
@@ -24,7 +25,7 @@ class WifiConnect {
     
     // Configuração e Conexão Inicial
     void connectManual();
-    void startAccessPoint(const char* apPassword = "senha123", uint32_t timeoutSegundos = 180);
+    void startAccessPoint(const char* apPassword = AP_PASSWORD_DEFAULT, uint32_t timeoutSegundos = 180);
     
     // Máquina de Estados Não Bloqueante (Deve ser chamada periodicamente no loop principal)
     void loop();

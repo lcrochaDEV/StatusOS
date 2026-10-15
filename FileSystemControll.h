@@ -2,8 +2,9 @@
 #define FILE_SYSTEM_CONTROLL_H
 
 #include <Arduino.h>
+#include "ConsoleDependencies.h"
 
-class FileSystemControll {
+class FileSystemControll : public IBrightnessControl {
 private:
     static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21
     static const uint32_t PWM_FREQ = 5000;    // 5 kHz
@@ -11,6 +12,8 @@ private:
     static const uint8_t PWM_CHANNEL = 0;     // Canal PWM
 
     uint8_t brilho_atual_pct = 80;            // Valor padrão inicial (80%)
+    uint8_t pwm_atual = 0;                    // Último valor PWM escrito no pino (0 a 255)
+    bool iniciado = false;
 
 public:
     FileSystemControll();
@@ -20,7 +23,7 @@ public:
     void setPinPwm(bool ligado);   // LOW / HIGH
 
     // Novo método para abstração percentual (0 a 100%)
-    void setBrilhoPorcentagem(uint8_t porcentagem) {
+    void setBrilhoPorcentagem(uint8_t porcentagem) override {
         if (porcentagem > 100) porcentagem = 100;
         brilho_atual_pct = porcentagem;
         
@@ -29,8 +32,18 @@ public:
         setPinPwm(pwm_val);
     }
 
-    uint8_t obterBrilhoPorcentagem() const {
+    uint8_t obterBrilhoPorcentagem() const override {
         return brilho_atual_pct;
+    }
+
+    // Ajuste direto por PWM (0 a 255) mantendo a porcentagem sincronizada
+    void setBrilhoPwm(uint8_t valor) {
+        brilho_atual_pct = (uint8_t)(((uint16_t)valor * 100 + 127) / 255);
+        setPinPwm(valor);
+    }
+
+    uint8_t obterPwm() const {
+        return pwm_atual;
     }
 };
 

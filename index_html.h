@@ -27,7 +27,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     
-    /* Layout principal alinhado em linha (Sidebar + Main) */
     body { 
       background: var(--bg-main); 
       color: var(--text-primary); 
@@ -36,12 +35,8 @@ static const char index_html[] PROGMEM = R"rawliteral(
       overflow-x: hidden; 
     }
 
-    /* Checkbox oculto de controle do menu */
-    #menu-toggle {
-        display: none;
-    }
+    #menu-toggle { display: none; }
 
-    /* Estilização do Menu Lateral integrado ao fluxo da página */
     .sidebar {
         width: 250px;
         min-width: 250px;
@@ -58,7 +53,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
         z-index: 10;
     }
 
-    /* Cabeçalho do Menu Lateral */
     .sidebar .brand {
         height: 60px;
         padding: 0 20px;
@@ -79,16 +73,9 @@ static const char index_html[] PROGMEM = R"rawliteral(
         transition: color 0.3s ease;
     }
 
-    .sidebar .brand span:hover {
-        color: var(--accent-magenta);
-    }
+    .sidebar .brand span:hover { color: var(--accent-magenta); }
 
-    /* Links do Menu */
-    .nav-links {
-        list-style: none;
-        padding: 20px 0;
-    }
-
+    .nav-links { list-style: none; padding: 20px 0; }
     .nav-links li a {
         display: flex;
         align-items: center;
@@ -105,7 +92,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
         color: var(--accent-cyan);
     }
 
-    /* Wrapper do conteúdo principal que se ajusta lado a lado */
     .main-wrapper { 
       flex: 1; 
       display: flex; 
@@ -160,7 +146,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
     .content { padding: 20px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
     .breadcrumb { font-size: 12px; color: var(--text-muted); margin-bottom: 5px; }
 
-    /* LAYOUT PADRÃO (TELAS MENORES QUE 23" / < 1920PX): ESTRUTURA VERTICAL PADRÃO */
     #dashboard-container {
       display: flex;
       flex-direction: column;
@@ -178,11 +163,8 @@ static const char index_html[] PROGMEM = R"rawliteral(
       min-width: 0;
     }
 
-    .host-section:last-child {
-      border-bottom: none;
-    }
+    .host-section:last-child { border-bottom: none; }
 
-    /* TELAS GRANDES (23 POLEGADAS OU MAIS / >= 1920PX): CARDS LADO A LADO NA HORIZONTAL */
     @media (min-width: 1920px) {
       #dashboard-container {
         display: grid;
@@ -211,7 +193,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
     
     .card-title { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
 
-    /* CARD SISTEMA OPERACIONAL */
     .row-os { width: 100%; }
     .card-os { width: 100%; overflow: hidden; position: relative; min-height: 90px; }
     .os-bg-logo { 
@@ -231,7 +212,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
     .os-name { font-size: 22px; font-weight: bold; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
     .os-details { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--text-muted); }
 
-    /* GAUGES CIRCULARES - 4 COLUNAS FIXAS EM DESKTOP */
     .row-top { 
       display: grid; 
       grid-template-columns: repeat(4, minmax(0, 1fr)); 
@@ -280,28 +260,14 @@ static const char index_html[] PROGMEM = R"rawliteral(
       width: 100%;
     }
 
-    /* TELAS PEQUENAS (SMARTPHONES <= 768PX): VOLTA AO PADRÃO ANTIGO DE 2 COLUNAS (2x2) NOS GAUGES */
     @media (max-width: 768px) {
-      .content {
-        padding: 10px;
-      }
-      .row-top {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 10px;
-      }
-      .gauge-container {
-        width: 80px;
-        height: 80px;
-      }
-      .gauge-value {
-        font-size: 13px;
-      }
-      .stat-label {
-        font-size: 10px;
-      }
+      .content { padding: 10px; }
+      .row-top { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .gauge-container { width: 80px; height: 80px; }
+      .gauge-value { font-size: 13px; }
+      .stat-label { font-size: 10px; }
     }
 
-    /* MÉTRICAS EMPILHADAS */
     .row-bottom { width: 100%; }
     .card-metrics { width: 100%; display: flex; flex-direction: column; gap: 14px; }
     .metrics-stack { display: flex; flex-direction: column; gap: 14px; }
@@ -312,38 +278,20 @@ static const char index_html[] PROGMEM = R"rawliteral(
     .spectrum-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta)); transition: width 0.5s ease; }
     .sub-text { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block; }
 
+    .disks-container-list { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+
     .metrics-footer { display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--border-card); padding-top: 10px; margin-top: 4px; }
 
-    /* Regra de Recolhimento do Menu */
-    #menu-toggle:checked ~ .sidebar {
-        width: 65px;
-        min-width: 65px;
-    }
-
-    #menu-toggle:checked ~ .sidebar .brand {
-        justify-content: center;
-        padding: 0;
-    }
-    
-    #menu-toggle:checked ~ .sidebar .brand text {
-        display: none;
-    }
-
-    #menu-toggle:checked ~ .sidebar .nav-links span {
-        display: none;
-    }
-
-    #menu-toggle:checked ~ .sidebar .nav-links li a {
-        justify-content: center;
-        padding: 15px 0;
-    }
+    #menu-toggle:checked ~ .sidebar { width: 65px; min-width: 65px; }
+    #menu-toggle:checked ~ .sidebar .brand { justify-content: center; padding: 0; }
+    #menu-toggle:checked ~ .sidebar .brand text { display: none; }
+    #menu-toggle:checked ~ .sidebar .nav-links span { display: none; }
+    #menu-toggle:checked ~ .sidebar .nav-links li a { justify-content: center; padding: 15px 0; }
   </style>
 </head>
 <body>
-  <!-- Checkbox oculto com 'checked' para iniciar o menu fechado -->
   <input type="checkbox" id="menu-toggle" checked>
 
-  <!-- Menu Lateral Enquadrado na Lateral -->
   <div class="sidebar">
       <label for="menu-toggle" class="brand">
           <span class="material-symbols-outlined">menu</span>
@@ -375,7 +323,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
     <main class="content">
       <div class="breadcrumb">Dashboard / Home</div>
       <div id="dashboard-container">
-        <!-- Os blocos de cada Host serão renderizados dinamicamente aqui -->
       </div>
     </main>
   </div>
@@ -408,7 +355,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
       chart.update();
     }
 
-    // FORMATAÇÃO DINÂMICA DE BYTES PARA QUALQUER ESCALA (B, KB, MB, GB, TB, PB)
     function formatDynamicBytes(valueInBytes) {
       if (valueInBytes === undefined || valueInBytes === null || isNaN(valueInBytes) || valueInBytes < 0) return '--';
       if (valueInBytes === 0) return '0 B';
@@ -508,6 +454,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
             <div class="card-title" style="color: var(--accent-magenta);">MÉTRICAS EM TEMPO REAL</div>
             
             <div class="metrics-stack">
+              <!-- MEMÓRIA RAM -->
               <div class="metric-item">
                 <div class="metric-header">
                   <span class="metric-label">Uso de Memória RAM</span>
@@ -519,15 +466,9 @@ static const char index_html[] PROGMEM = R"rawliteral(
                 <span class="sub-text" id="ram-total-label-${safeKey}" style="color: var(--accent-cyan); font-weight: 600; text-align: right; display: block;">Total: --</span>
               </div>
 
-              <div class="metric-item">
-                <div class="metric-header">
-                  <span class="metric-label">Uso do Disco</span>
-                  <span class="sub-text" id="disk-sub-${safeKey}">0%</span>
-                </div>
-                <div class="spectrum-bar">
-                  <div class="spectrum-fill" id="disk-bar-${safeKey}" style="background: linear-gradient(90deg, var(--accent-green), var(--accent-yellow));"></div>
-                </div>
-                <span class="sub-text" id="disk-total-label-${safeKey}" style="color: var(--accent-cyan); font-weight: 600; text-align: right; display: block;">Total: --</span>
+              <!-- DISCOS (CONTAINER DINÂMICO DE BARRAS POR DISCO) -->
+              <div class="disks-container-list" id="disks-container-${safeKey}">
+                <!-- Renderizado Dinamicamente no JS -->
               </div>
             </div>
 
@@ -572,7 +513,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
                     (data.metricas ? data.metricas.cpu_load_1m : 0);
       const cpuVal = Math.min(Math.round((rawCpu * 100) / 4), 100);
 
-      // --- EXTRAÇÃO ROBUSTA DE DADOS EM BYTES (RAM) ---
+      // RAM
       let ramTotalBytes = Number(data.ram_total_bytes ?? data.metricas?.memoria?.total_bytes ?? 0);
       let ramUsedBytes  = Number(data.ram_used_bytes ?? data.metricas?.memoria?.usada_bytes ?? 0);
 
@@ -587,7 +528,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
       const ramVal = data.ram_pct !== undefined ? Math.round(data.ram_pct) :
                      (ramTotalBytes > 0 ? Math.min(100, Math.round((ramUsedBytes / ramTotalBytes) * 100)) : 0);
 
-      // --- EXTRAÇÃO ROBUSTA DE DADOS EM BYTES (DISCO) ---
+      // DISCO GERAL (AGREGADO PARA A GAUGE)
       let diskTotalBytes = Number(data.disk_total_bytes ?? data.metricas?.disco?.total_bytes ?? 0);
       let diskUsedBytes  = Number(data.disk_used_bytes ?? data.metricas?.disco?.usado_bytes ?? 0);
 
@@ -607,7 +548,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
                      (data.metricas && data.metricas.cpu_temp !== undefined ? data.metricas.cpu_temp : 0);
       const tempVal = typeof rawTemp === 'number' ? Math.round(rawTemp) : 0;
 
-      // ATUALIZAÇÃO DAS GAUGES
+      // ATUALIZAÇÃO GAUGES
       const elCpu = document.getElementById(`cpu-value-${safeKey}`);
       const elRam = document.getElementById(`ram-value-${safeKey}`);
       const elDisk = document.getElementById(`disk-value-${safeKey}`);
@@ -626,7 +567,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
         updateGauge(charts.tempGauge, Math.min(tempVal, 100));
       }
 
-      // SISTEMA OPERACIONAL & LOGO
+      // SO & LOGO
       const osName = data.os_name || (data.sistema_operacional ? data.sistema_operacional.nome : '--');
       const osKernel = data.kernel || (data.sistema_operacional ? data.sistema_operacional.kernel : '--');
       const logoUrl = data.logo_url || (data.sistema_operacional ? data.sistema_operacional.logo_url : '');
@@ -647,7 +588,69 @@ static const char index_html[] PROGMEM = R"rawliteral(
         }
       }
 
-      // SUB-TEXTOS E METRICAS FORMATADAS
+      // BARRAS E SUBTEXTOS (RAM)
+      const elRamBar = document.getElementById(`ram-bar-${safeKey}`);
+      const elRamSub = document.getElementById(`ram-sub-${safeKey}`);
+      const elRamTotalLabel = document.getElementById(`ram-total-label-${safeKey}`);
+
+      if (elRamBar) elRamBar.style.width = ramVal + '%';
+      if (elRamSub) elRamSub.textContent = `${ramVal}% (${formatDynamicBytes(ramUsedBytes)} usados)`;
+      if (elRamTotalLabel) elRamTotalLabel.textContent = 'Total: ' + formatDynamicBytes(ramTotalBytes);
+
+      // --- RENDERIZAÇÃO DINÂMICA DE BARRAS DE DISCOS EXIBINDO APENAS O MODELO NO TOTAL ---
+      const disksContainer = document.getElementById(`disks-container-${safeKey}`);
+      const hwDisks = data.metricas?.hardware_discos || data.hardware_discos;
+
+      if (disksContainer) {
+        disksContainer.innerHTML = '';
+
+        if (Array.isArray(hwDisks) && hwDisks.length > 0) {
+          hwDisks.forEach((disk) => {
+            const dTotal = Number(disk.total_bytes || 0);
+            const dUsed = Number(disk.usado_bytes || 0);
+            const dFree = Number(disk.livre_bytes || Math.max(0, dTotal - dUsed));
+            const dPct = dTotal > 0 ? Math.min(100, Math.round((dUsed / dTotal) * 100)) : 0;
+            const diskModel = disk.model && disk.model !== 'Desconhecido' ? disk.model : '';
+
+            // Exibe estritamente apenas o modelo ao lado do total
+            let diskModelText = diskModel ? ` | ${diskModel}` : '';
+
+            const diskItemHtml = `
+              <div class="metric-item">
+                <div class="metric-header">
+                  <span class="metric-label">Uso do Disco</span>
+                  <span class="sub-text">${dPct}% (${formatDynamicBytes(dFree)} livre)</span>
+                </div>
+                <div class="spectrum-bar">
+                  <div class="spectrum-fill" style="width: ${dPct}%; background: linear-gradient(90deg, var(--accent-green), var(--accent-yellow));"></div>
+                </div>
+                <span class="sub-text" style="color: var(--accent-cyan); font-weight: 600; text-align: right; display: block;">
+                  Total: ${formatDynamicBytes(dTotal)}${diskModelText}
+                </span>
+              </div>
+            `;
+            disksContainer.insertAdjacentHTML('beforeend', diskItemHtml);
+          });
+        } else {
+          // FALLBACK CASO O AGENTE NÃO ENVIE O ARRAY HARDWARE_DISCOS
+          const fallbackFreeBytes = Math.max(0, diskTotalBytes - diskUsedBytes);
+          const diskItemHtml = `
+            <div class="metric-item">
+              <div class="metric-header">
+                <span class="metric-label">Uso do Disco</span>
+                <span class="sub-text">${diskVal}% (${formatDynamicBytes(fallbackFreeBytes)} livre)</span>
+              </div>
+              <div class="spectrum-bar">
+                <div class="spectrum-fill" style="width: ${diskVal}%; background: linear-gradient(90deg, var(--accent-green), var(--accent-yellow));"></div>
+              </div>
+              <span class="sub-text" style="color: var(--accent-cyan); font-weight: 600; text-align: right; display: block;">Total: ${formatDynamicBytes(diskTotalBytes)}</span>
+            </div>
+          `;
+          disksContainer.insertAdjacentHTML('beforeend', diskItemHtml);
+        }
+      }
+
+      // FOOTER
       const host = data.server || data.host || '--';
       const uptime = data.uptime || '--';
       const datetime = data.datetime || data.timestamp || '--';
@@ -655,52 +658,10 @@ static const char index_html[] PROGMEM = R"rawliteral(
       const mac = data.mac || '--';
       const id = data.id || '--';
 
-      const elRamBar = document.getElementById(`ram-bar-${safeKey}`);
-      const elDiskBar = document.getElementById(`disk-bar-${safeKey}`);
-      const elRamSub = document.getElementById(`ram-sub-${safeKey}`);
-      const elDiskSub = document.getElementById(`disk-sub-${safeKey}`);
-      const elRamTotalLabel = document.getElementById(`ram-total-label-${safeKey}`);
-      const elDiskTotalLabel = document.getElementById(`disk-total-label-${safeKey}`);
       const elHost = document.getElementById(`host-label-${safeKey}`);
       const elDatetime = document.getElementById(`datetime-label-${safeKey}`);
       const elUptime = document.getElementById(`uptime-label-${safeKey}`);
       const elId = document.getElementById(`id-label-${safeKey}`);
-
-      if (elRamBar) elRamBar.style.width = ramVal + '%';
-      if (elDiskBar) elDiskBar.style.width = diskVal + '%';
-
-      if (elRamSub) elRamSub.textContent = `${ramVal}% (${formatDynamicBytes(ramUsedBytes)} usados)`;
-      if (elDiskSub) elDiskSub.textContent = `${diskVal}% (${formatDynamicBytes(Math.max(0, diskTotalBytes - diskUsedBytes))} livre)`;
-
-      if (elRamTotalLabel) elRamTotalLabel.textContent = 'Total: ' + formatDynamicBytes(ramTotalBytes);
-
-      // EXTRAÇÃO E FORMATAÇÃO DO MODELO DE DISCO
-      let diskModelText = '';
-      let diskModelList = '';
-
-      const hwDisks = data.metricas?.hardware_discos || data.hardware_discos;
-      if (Array.isArray(hwDisks) && hwDisks.length > 0) {
-        const models = hwDisks
-          .map(d => d.model)
-          .filter(m => m && m !== 'Desconhecido');
-
-        if (models.length > 0) {
-          diskModelList = models.join(', ');
-          diskModelText = ' | ' + diskModelList;
-        }
-      }
-
-      if (elDiskTotalLabel) {
-        elDiskTotalLabel.textContent = 'Total: ' + formatDynamicBytes(diskTotalBytes) + diskModelText;
-
-        if (diskModelList) {
-          elDiskTotalLabel.title = "Modelo(s) do HD: " + diskModelList;
-          elDiskTotalLabel.style.cursor = "pointer";
-        } else {
-          elDiskTotalLabel.removeAttribute('title');
-          elDiskTotalLabel.style.cursor = "default";
-        }
-      }
 
       if (elHost) elHost.textContent = 'Host: ' + host + ' | IP: ' + ip + ' | MAC: ' + mac;
       if (elDatetime) elDatetime.textContent = 'Data: ' + datetime;
@@ -779,7 +740,6 @@ static const char index_html[] PROGMEM = R"rawliteral(
 
     window.addEventListener('load', initWebSocket);
 
-    // RELÓGIO (DATE & HOUR)
     const currentHourElement = document.getElementById('current_hour');
     const currentDateElement = document.getElementById('current_date');
 

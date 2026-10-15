@@ -8,6 +8,7 @@
 #include <string.h>
 #include "WifiConnect.h"
 #include "FileSystemControll.h"
+#include "ConsoleDependencies.h"
 
 // ==========================================
 // PALETA DE CORES (DARK MODE NEON)
@@ -273,6 +274,10 @@ public:
         }
     }
 
+    // Estado real dos popups (fonte única de verdade; evita flags duplicadas no Console)
+    bool popup_wifi_aberto() const { return msgbox_wifi != nullptr; }
+    bool popup_brilho_aberto() const { return msgbox_brilho != nullptr; }
+
     void init() {
         lv_obj_t *scr = lv_screen_active();
         if (!scr) return;
@@ -389,7 +394,7 @@ public:
 
     void update_display(const char* host, const char* os_name, const char* kernel, 
                         float temp, float cpu_load, int ram_pct, int disk_pct, 
-                        const char* uptime) {
+                        const char* uptime, float cpu_cores = 4.0f) {
         if (label_host && host) lv_label_set_text(label_host, host);
         if (lbl_os_name) lv_label_set_text_fmt(lbl_os_name, "SO: %s", os_name ? os_name : "N/A");
         if (lbl_os_kernel) lv_label_set_text_fmt(lbl_os_kernel, "Kernel: %s | Up: %s", 
@@ -397,7 +402,7 @@ public:
                                                     uptime ? uptime : "--");
 
         int pcts[3] = {
-            (int)(cpu_load * 25.0f + 0.5f), // CPU% ajustado (considerando 4 cores)
+            (int)(cpu_load * (100.0f / (cpu_cores < 1.0f ? 1.0f : cpu_cores)) + 0.5f), // CPU% ajustado (considerando 4 cores)
             ram_pct,
             disk_pct
         };
@@ -441,17 +446,32 @@ inline void ui_abrir_popup_wifi()  { g_dashboard.mostrar_popup_wifi(); }
 inline void ui_fechar_popup_wifi() { g_dashboard.fechar_popup_wifi(); }
 inline void ui_abrir_popup_brilho() { g_dashboard.mostrar_popup_brilho(); }
 inline void ui_fechar_popup_brilho(){ g_dashboard.fechar_popup_brilho(); }
+inline bool ui_popup_wifi_aberto()   { return g_dashboard.popup_wifi_aberto(); }
+inline bool ui_popup_brilho_aberto() { return g_dashboard.popup_brilho_aberto(); }
 
 inline void update_telemetry_data(const char* host, const char* os_name, const char* kernel, 
                                   float temp, float cpu_load, int ram_pct, int disk_pct, 
-                                  const char* uptime, const void* logo_url) {
+                                  const char* uptime, const void* logo_url, float cpu_cores = 4.0f) {
     (void)logo_url;
     g_dashboard.set_online_status(true);
-    g_dashboard.update_display(host, os_name, kernel, temp, cpu_load, ram_pct, disk_pct, uptime);
+    g_dashboard.update_display(host, os_name, kernel, temp, cpu_load, ram_pct, disk_pct, uptime, cpu_cores);
 }
 
 inline void update_status(bool online) {
     g_dashboard.set_online_status(online);
 }
+
+// Adaptador que expõe os popups do Dashboard ao Console (interface IPopupControl)
+class DashboardPopupControl : public IPopupControl {
+public:
+    void abrirWifi() override { ui_abrir_popup_wifi(); }
+    void fecharWifi() override { ui_fechar_popup_wifi(); }
+    bool wifiAberto() const override { return ui_popup_wifi_aberto(); }
+    void abrirBrilho() override { ui_abrir_popup_brilho(); }
+    void fecharBrilho() override { ui_fechar_popup_brilho(); }
+    bool brilhoAberto() const override { return ui_popup_brilho_aberto(); }
+};
+
+inline DashboardPopupControl g_popup_control;
 
 #endif // UI_DASHBOARD_H
