@@ -166,7 +166,7 @@ void Console::commands_envio(const String& command) {
     {"BRIGHT",    &Console::cmdBright},
     {"SETBRIGHT", &Console::cmdSetBrightness},
     // COMANDOS DE ACIONAMENTO DE ANIMAÇÕES
-    {"PS1",       &Console::cmdPs1},
+    {"LOGO",       &Console::cmdLogo},
     {"ANIMACAO",  &Console::cmdAnimacao},
     {"GIF",       &Console::cmdAnimacao},
     {"TESTRED",   &Console::cmdTestRed},
@@ -207,7 +207,7 @@ void Console::cmdHelp(const String& param) {
     "SHOWWIFI           - Abre/fecha alternadamente o popup de Wi-Fi\n"
     "SHOWBRIGHT         - Abre/fecha alternadamente o popup de controle do brilho\n"
     "SETBRIGHT <0-100>  - Ajusta diretamente a porcentagem de brilho no hardware PWM\n"
-    "PS1                - Exibe a tela de boot (PS1 Startup); repetir volta ao dashboard\n"
+    "LOGO                - Exibe a tela de boot (LOGO Startup); repetir volta ao dashboard\n"
     "ANIMACAO <BOOT | NOTWIFI | BUG> - Executa a animação indicada\n"
     "TESTRED            - Liga/desliga a tela vermelha de teste\n"
     "FORADOAR           - Executa a animação Fora do Ar (3 s)\n"
@@ -289,7 +289,7 @@ void Console::cmdSetBrightness(const String& param) {
   }
 }
 
-void Console::cmdPs1(const String& param) {
+void Console::cmdLogo(const String& param) {
   (void)param;
   if (!animationReady()) return;
 
@@ -356,7 +356,6 @@ void Console::cmdWake(const String& param) {
     menssageViewMsg("[Console] Erro: Ação de despertar não registrada.");
     return;
   }
-
   _wakeAction();
   menssageViewMsg("[Console] Solicitado despertar manual (efetivo apenas no período noturno).");
 }

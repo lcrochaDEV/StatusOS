@@ -5,7 +5,7 @@
 #elif defined(ESP32)
   #include <WiFi.h>
 #endif
-#include "PS1_Startup.h"
+#include "ciclope.h"
 #include "foradoar.h"
 
 static TFT_eSPI* pTftInstance = nullptr;
@@ -61,6 +61,7 @@ bool Animations::playAnimation(GifID animType) {
                 stop();
                 _isTestMode = false;
             } else {
+                
                 // Primeira chamada: exibe a imagem de boot e trava o modo de teste
                 stop();
                 _currentAnim = GifID::BOOT;
@@ -73,11 +74,12 @@ bool Animations::playAnimation(GifID animType) {
                     uint16_t linhaBuffer[320];
                     for (int x = 0; x < 320; x++) {
                         int index = y * 320 + x;
-                        linhaBuffer[x] = __builtin_bswap16(((uint16_t*)PS1_Startup)[index]);
+                        linhaBuffer[x] = __builtin_bswap16(((uint16_t*)ciclope)[index]);
                     }
                     _tft.pushImage(0, y, 320, 1, linhaBuffer);
                 }
                 _tft.endWrite();
+                vTaskDelay(pdMS_TO_TICKS(2000));
             }
             return true;
             break;
@@ -231,7 +233,7 @@ void Animations::foraDoAr() {
     // Descobre dinamicamente o total de quadros no seu arquivo .h
     _foraTotalFrames = sizeof(tft_image_frames) / sizeof(tft_image_frames[0]);
 
-    Serial.println("[Animations] Iniciando loop Fora do Ar por 3 segundos...");
+    Serial.println("[Animations] Iniciando loop Fora do Ar...");
 
     // 2. REGISTRO DO TEMPO INICIAL
     _foraStartMs = millis();

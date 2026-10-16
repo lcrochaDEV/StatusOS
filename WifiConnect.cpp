@@ -113,21 +113,15 @@ WifiState WifiConnect::getState() const {
 // ==========================================
 const char* WifiConnect::obtainIP() {
     static char ip_str[16];
-    if (WiFi.status() == WL_CONNECTED) {
-        snprintf(ip_str, sizeof(ip_str), "%s", WiFi.localIP().toString().c_str());
-    } else {
-        snprintf(ip_str, sizeof(ip_str), "0.0.0.0");
-    }
+    if (WiFi.status() == WL_CONNECTED) snprintf(ip_str, sizeof(ip_str), "%s", WiFi.localIP().toString().c_str());
+    else snprintf(ip_str, sizeof(ip_str), "0.0.0.0");
     return ip_str;
 }
 
 const char* WifiConnect::obtainMascara() {
     static char mask_str[16];
-    if (WiFi.status() == WL_CONNECTED) {
-        snprintf(mask_str, sizeof(mask_str), "%s", WiFi.subnetMask().toString().c_str());
-    } else {
-        snprintf(mask_str, sizeof(mask_str), "0.0.0.0");
-    }
+    if (WiFi.status() == WL_CONNECTED) snprintf(mask_str, sizeof(mask_str), "%s", WiFi.subnetMask().toString().c_str());
+    else snprintf(mask_str, sizeof(mask_str), "0.0.0.0");
     return mask_str;
 }
 
