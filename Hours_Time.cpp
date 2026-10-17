@@ -75,10 +75,6 @@ void Hours_Time::calendar() {
     Serial.println("-------------------");
 }
 
-void Hours_Time::onSleep(std::function<void()> callback) { _onSleep = callback; }
-
-void Hours_Time::onWake(std::function<void()> callback) { _onWake = callback; }
-
 void Hours_Time::notificar(bool dormir) {
     // Ação padrão: apaga o backlight no período noturno e restaura o brilho anterior ao acordar
     // (no boot diurno o brilho não é alterado: displayOn() só restaura se displayOff() apagou)

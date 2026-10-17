@@ -17,7 +17,7 @@ class Console {
     void setAnimations(IAnimationControl* animPtr) { _anim = animPtr; }
     void setBrightnessControl(IBrightnessControl* brightnessPtr) { _brightness = brightnessPtr; }
     void setIPopupControl(IPopupControl* popupPtr) { _popup = popupPtr; }
-    void setWakeAction(std::function<void()> action) { _wakeAction = action; }
+    //void setWakeAction(std::function<void()> action) { _wakeAction = action; }
 
 
     // Métodos legados/compatibilidade
@@ -39,7 +39,7 @@ class Console {
     IAnimationControl* _anim = nullptr; // Ponteiro interno para controle de animação
     IBrightnessControl* _brightness = nullptr; // Ponteiro para controle de brilho
     IPopupControl* _popup = nullptr; // Ponteiro para controle de popups
-    std::function<void()> _wakeAction = nullptr;
+    //std::function<void()> _wakeAction = nullptr;
 
 
     // Tabela de comandos (nome em maíusculas -> manipulador)

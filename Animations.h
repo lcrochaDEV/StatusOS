@@ -25,7 +25,6 @@ public:
     void setBootExitCondition(std::function<bool()> conditions);
 
     bool isPlaying() const override { return _isPlaying || _isTestMode; }
-    bool isActive() const { return _currentAnim != GifID::NONE; }
     GifID getCurrentAnimation() const override { return _currentAnim; }
 
     //GIFs LIST
@@ -52,11 +51,6 @@ private:
     uint32_t _foraLastFrameMs = 0;
     int _foraFrame = 0;
     int _foraTotalFrames = 0;
-
-    // Flag de controle local simples para gerenciar o estado da animação
-    unsigned long _animTimer = 0;
-    unsigned long _frameTimer = 0;
-    int _frameIndex = 0;
 
     void atualizarForaDoAr();
     static void GIFDraw(GIFDRAW *pDraw);

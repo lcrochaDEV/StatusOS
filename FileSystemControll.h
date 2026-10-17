@@ -44,8 +44,10 @@ public:
         setPinPwm(valor);
     }
 
-    uint8_t obterPwm() const return pwm_atual;
-    
+    uint8_t obterPwm() const {
+        return pwm_atual;
+    }
+        
     // Apaga o backlight memorizando o brilho atual
     void displayOff() override {
         if (brilho_atual_pct > 0) brilho_antes_de_apagar = brilho_atual_pct;
