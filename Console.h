@@ -69,9 +69,11 @@ class Console {
     void cmdLogOn(const String& param);   //ATIVA OS LOGS CONTINUOS
     void cmdLogOff(const String& param);  //DESATIVA OS LOGS CONTINUOS
     void cmdWake(const String& param);
-
+    
+    virtual void cmdClear(const String& args);
     bool animationReady();
     
+    void limparTerminal();
 };
 
 extern Console console;

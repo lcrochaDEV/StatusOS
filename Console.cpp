@@ -179,6 +179,7 @@ void Console::commands_envio(const String& command) {
     {"DASHBOARD", &Console::cmdStop},
     {"FORADOAR",  &Console::cmdForaDoAr},
     {"WAKE",      &Console::cmdWake},
+    {"CLEAR",     &Console::cmdClear},
   };
 
   for (const CommandEntry& entry : commands) {
@@ -217,6 +218,7 @@ void Console::cmdHelp(const String& param) {
     "FORADOAR           - Executa a animação Fora do Ar (3 s)\n"
     "STOP               - Para a animação/teste e retorna ao dashboard\n"
     "WAKE               - Liga o display manualmente no período noturno (timeout de 5 min)"
+    "CLEAR              - Limpar terminal"
   );
 }
 
@@ -391,3 +393,12 @@ void Console::cmdDisplayOff(const String& param) {
 void Console::cmdWake(const String& args) {
     // Handle the WAKE command here
 }
+
+void Console::cmdClear(const String& args) {
+    Serial.write(27);      // Caractere ESC (ASCII 27)
+    Serial.print("[2J");   // Comando ANSI para limpar a tela
+    Serial.write(27);      // Caractere ESC
+    Serial.print("[H");    // Comando ANSI para mover o cursor para o topo
+}
+
+
