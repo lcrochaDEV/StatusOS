@@ -165,6 +165,8 @@ void Console::commands_envio(const String& command) {
     {"SHOWBRIGHT", &Console::cmdBrightPopup},
     {"BRIGHT",    &Console::cmdBright},
     {"SETBRIGHT", &Console::cmdSetBrightness},
+    {"DISPLAYON", &Console::cmdDisplayOn},
+    {"DISPLAYOFF", &Console::cmdDisplayOff},
     // COMANDOS DE ACIONAMENTO DE ANIMAÇÕES
     {"LOGO",       &Console::cmdLogo},
     {"ANIMACAO",  &Console::cmdAnimacao},
@@ -207,7 +209,9 @@ void Console::cmdHelp(const String& param) {
     "SHOWWIFI           - Abre/fecha alternadamente o popup de Wi-Fi\n"
     "SHOWBRIGHT         - Abre/fecha alternadamente o popup de controle do brilho\n"
     "SETBRIGHT <0-100>  - Ajusta diretamente a porcentagem de brilho no hardware PWM\n"
-    "LOGO                - Exibe a tela de boot (LOGO Startup); repetir volta ao dashboard\n"
+    "DISPLAYON          - Liga a tela (restaura o brilho anterior)\n"
+    "DISPLAYOFF         - Desliga a tela (backlight em 0%)\n"
+    "LOGO               - Exibe a tela de boot (LOGO Startup); repetir volta ao dashboard\n"
     "ANIMACAO <BOOT | NOTWIFI | BUG> - Executa a animação indicada\n"
     "TESTRED            - Liga/desliga a tela vermelha de teste\n"
     "FORADOAR           - Executa a animação Fora do Ar (3 s)\n"
@@ -335,6 +339,9 @@ void Console::cmdStop(const String& param) {
   if (!animationReady()) return;
 
   _anim->stop(); // Chama o stop() que força o redesenho no LVGL
+  _popup->fecharWifi();
+  _popup->fecharBrilho();
+
   menssageViewMsg("[Console] Teste/Animação parada. Retornando ao Dashboard LVGL.");
 }
 
@@ -350,12 +357,37 @@ void Console::cmdForaDoAr(const String& param) {
   }
 }
 
-void Console::cmdWake(const String& param) {
+// DISPLAYON/DISPLAYOFF passam pelo Hours_Time (quando existe) para respeitar o período noturno
+void Console::cmdDisplayOn(const String& param) {
   (void)param;
-  if (!_wakeAction) {
-    menssageViewMsg("[Console] Erro: Ação de despertar não registrada.");
+  Hours_Time* horario = Hours_Time::instance();
+  if (horario != nullptr) {
+    horario->manual_turn_on(); // No período noturno volta a dormir em 5 minutos
+  } else if (_brightness != nullptr) {
+    _brightness->displayOn();
+  } else {
+    menssageViewMsg("[Console] Erro: Controle de brilho não registrado.");
     return;
   }
-  _wakeAction();
-  menssageViewMsg("[Console] Solicitado despertar manual (efetivo apenas no período noturno).");
+
+  menssageViewMsg("[Console] Display ligado.");
+}
+
+void Console::cmdDisplayOff(const String& param) {
+  (void)param;
+  Hours_Time* horario = Hours_Time::instance();
+  if (horario != nullptr) {
+    horario->manual_turn_off();
+  } else if (_brightness != nullptr) {
+    _brightness->displayOff();
+  } else {
+    menssageViewMsg("[Console] Erro: Controle de brilho não registrado.");
+    return;
+  }
+
+  menssageViewMsg("[Console] Display desligado.");
+}
+
+void Console::cmdWake(const String& args) {
+    // Handle the WAKE command here
 }

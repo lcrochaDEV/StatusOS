@@ -6,7 +6,6 @@
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
 #include <Preferences.h>
-#include <functional>
 #include <mutex>
 #include "SecurityConfig.h"
 #include "ui_dashboard.h"
@@ -355,9 +354,9 @@ inline void setup_web_server() {
             );
             return;
         }
-        request->send_P(200, "text/html", index_html); // Transmite direto da flash, sem copiar para o heap
+        request->send(200, "text/html", index_html); // Transmite direto da flash, sem copiar para o heap
     });
-
+    
     server.on("/datetime", HTTP_GET, handleDateTime);
 
     server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {

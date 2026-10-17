@@ -1,16 +1,15 @@
 #ifndef CONSOLE_DEPENDECIES_H
 #define CONSOLE_DEPENDECIES_H
 
-
 #include <Arduino.h>
 
 enum class GifID {
     NONE,
     BOOT,       
-    NOT_WIFI,   
-    NOT_WORKER, 
-    BUG_FRAME,  
-    STANDBY,
+    NOT_WIFI,   //SEM USO
+    NOT_WORKER, //SEM USO
+    BUG_FRAME,  //SEM USO
+    STANDBY,    //SEM USO
     FORA_DO_AR     
 };
 
@@ -31,6 +30,8 @@ class IBrightnessControl {
         virtual ~IBrightnessControl() = default;
         virtual void setBrilhoPorcentagem(uint8_t porcentagem) = 0;
         virtual uint8_t obterBrilhoPorcentagem() const = 0;
+        virtual void displayOff() = 0;
+        virtual void displayOn() = 0;
 };
 
 class IPopupControl {

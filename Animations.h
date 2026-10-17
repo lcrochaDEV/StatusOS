@@ -34,8 +34,10 @@ public:
 
 private:
     TFT_eSPI& _tft;
+    
     AnimatedGIF* _gif = nullptr;
     bool _isPlaying = false;
+
     bool _isTestMode = false;
     bool _inStop = false; // Trava contra recursao infinita
     

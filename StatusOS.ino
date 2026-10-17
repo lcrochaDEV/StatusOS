@@ -12,7 +12,6 @@ Console console = Console("Mochi> ");
 
 const char* hours_wakeon = "06:30";  // hours_down: Deve ser o fim do período noturno (06:00).
 const char* hours_sleep = "22:03";   // hours_up: Deve ser o início do período noturno (22:00).
-#include "Hours_Time.h"
 
 // Passa a referência da animação para o relógio
 Hours_Time hours_Time_exec = Hours_Time(hours_sleep, hours_wakeon, "", -3 * 3600, 0, "pool.ntp.org");

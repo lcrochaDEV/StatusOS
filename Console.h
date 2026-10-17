@@ -7,6 +7,7 @@
 #include "ConsoleDependencies.h"
 #include "FileSystemControll.h"
 #include "ui_dashboard.h"
+#include "Hours_Time.h"
 
 class Console {
   public:
@@ -53,17 +54,20 @@ class Console {
 
     // Manipuladores de comandos
     void cmdHelp(const String& param);
-    void cmdLogOn(const String& param);
-    void cmdLogOff(const String& param);
     void cmdWifiPopup(const String& param);
     void cmdBrightPopup(const String& param);
     void cmdBright(const String& param);
     void cmdSetBrightness(const String& param);
+    void cmdDisplayOn(const String& param);
+    void cmdDisplayOff(const String& param);
     void cmdLogo(const String& param);
     void cmdAnimacao(const String& param);
     void cmdTestRed(const String& param);
     void cmdStop(const String& param);
     void cmdForaDoAr(const String& param);
+
+    void cmdLogOn(const String& param);   //ATIVA OS LOGS CONTINUOS
+    void cmdLogOff(const String& param);  //DESATIVA OS LOGS CONTINUOS
     void cmdWake(const String& param);
 
     bool animationReady();

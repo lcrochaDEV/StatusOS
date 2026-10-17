@@ -658,6 +658,20 @@ static const char config_html[] PROGMEM = R"rawliteral(
       setTimeout(() => { toast.classList.remove("show"); }, 3000);
     }
 
+    // Token opcional (API_TOKEN do firmware), guardado apenas neste navegador
+    function authHeaders() {
+      const headers = { "Content-Type": "application/json" };
+      let token = "";
+      try { token = localStorage.getItem("statusos_token") || ""; } catch (e) {}
+      if (token) headers["X-Auth-Token"] = token;
+      return headers;
+    }
+
+    function pedirToken() {
+      const token = prompt("Token de acesso (API_TOKEN):");
+      if (token) { try { localStorage.setItem("statusos_token", token); } catch (e) {} }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
       // Aplica a formatação de métricas ao carregar
       applyMetricFormatting();
@@ -667,11 +681,12 @@ static const char config_html[] PROGMEM = R"rawliteral(
       if (switchWeb) {
         switchWeb.addEventListener("change", async (e) => {
           try {
-            await fetch("/api/config", {
+            const resp = await fetch("/api/config", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: authHeaders(),
               body: JSON.stringify({ webserver: e.target.checked })
             });
+            if (resp.status === 401) { pedirToken(); showToast("Token necessário. Informe-o e tente novamente.", "var(--accent-magenta)"); return; }
             showToast("Estado do servidor alterado com sucesso!");
           } catch (err) {
             console.error("Erro ao alterar estado do servidor:", err);
@@ -691,7 +706,7 @@ static const char config_html[] PROGMEM = R"rawliteral(
       try {
         const response = await fetch("/api/config", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders(),
           body: JSON.stringify({
             wake_time: wakeTime,
             sleep_time: sleepTime
@@ -700,6 +715,9 @@ static const char config_html[] PROGMEM = R"rawliteral(
         
         if (response.ok) {
           showToast("Parâmetros do Display salvos com sucesso!");
+        } else if (response.status === 401) {
+          pedirToken();
+          showToast("Token necessário. Informe-o e salve novamente.", "var(--accent-magenta)");
         } else {
           showToast("Falha ao salvar parâmetros.", "var(--accent-magenta)");
         }

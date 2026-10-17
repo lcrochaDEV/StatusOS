@@ -335,6 +335,11 @@ static const char index_html[] PROGMEM = R"rawliteral(
       return String(key).replace(/[^a-zA-Z0-9_-]/g, '_');
     }
 
+    // Escapa texto vindo do coletor antes de inseri-lo em HTML (o modelo do disco é livre)
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    }
+
     function createGauge(elementId, color) {
       return new Chart(document.getElementById(elementId), {
         type: 'doughnut',
@@ -511,7 +516,8 @@ static const char index_html[] PROGMEM = R"rawliteral(
       // CPU
       const rawCpu = data.cpu_load !== undefined ? data.cpu_load : 
                     (data.metricas ? data.metricas.cpu_load_1m : 0);
-      const cpuVal = Math.min(Math.round((rawCpu * 100) / 4), 100);
+      const cpuCores = Number(data.metricas?.cpu_cores ?? data.cpu_cores) || 4;
+      const cpuVal = Math.min(Math.round((rawCpu * 100) / cpuCores), 100);
 
       // RAM
       let ramTotalBytes = Number(data.ram_total_bytes ?? data.metricas?.memoria?.total_bytes ?? 0);
@@ -613,7 +619,7 @@ static const char index_html[] PROGMEM = R"rawliteral(
             const diskModel = disk.model && disk.model !== 'Desconhecido' ? disk.model : '';
 
             // Exibe estritamente apenas o modelo ao lado do total
-            let diskModelText = diskModel ? ` | ${diskModel}` : '';
+            let diskModelText = diskModel ? ` | ${escapeHtml(diskModel)}` : '';
 
             const diskItemHtml = `
               <div class="metric-item">

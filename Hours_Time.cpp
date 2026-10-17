@@ -81,21 +81,11 @@ void Hours_Time::onWake(std::function<void()> callback) { _onWake = callback; }
 
 void Hours_Time::notificar(bool dormir) {
     // Ação padrão: apaga o backlight no período noturno e restaura o brilho anterior ao acordar
+    // (no boot diurno o brilho não é alterado: displayOn() só restaura se displayOff() apagou)
     if (_brightness != nullptr) {
-        if (dormir) {
-            uint8_t atual = _brightness->obterBrilhoPorcentagem();
-            if (atual > 0) _brilho_antes_de_dormir = atual;
-            _brightness->setBrilhoPorcentagem(0);
-            _display_apagado = true;
-        } else if (_display_apagado) {
-            // Só restaura se este módulo apagou o display (no boot diurno o brilho não é alterado)
-            _brightness->setBrilhoPorcentagem(_brilho_antes_de_dormir);
-            _display_apagado = false;
-        }
+        if (dormir) _brightness->displayOff();
+        else _brightness->displayOn();
     }
-
-    if (dormir) { if (_onSleep) _onSleep(); }
-    else        { if (_onWake) _onWake(); }
 }
 
 bool Hours_Time::isValidTimeFormat(const char* hhmm) {
@@ -169,19 +159,25 @@ void Hours_Time::weke_on() {
 }
 
 void Hours_Time::manual_turn_on() {
+    notificar(false); // Acende o display
+
     struct tm timeinfo;
-    if (getLocalTime(&timeinfo, 0)) {
-        char currentTimeStr[6];
-        strftime(currentTimeStr, sizeof(currentTimeStr), "%H:%M", &timeinfo); 
-        
-        // Verifica se estamos no período noturno (entre hours_sleep e hours_wakeon)
-        if (isNightPeriod(currentTimeStr)) {    
-            is_manual_mode = true;
-            manual_on_timestamp = millis();
-            notificar(false); // Acende o display durante o modo manual
-            Serial.println("Display ligado manualmente (Modo Timeout ativado).");
-        }
+    if (!getLocalTime(&timeinfo, 0)) return; // Sem hora sincronizada não há como saber se é período noturno
+
+    char currentTimeStr[6];
+    strftime(currentTimeStr, sizeof(currentTimeStr), "%H:%M", &timeinfo);
+
+    // Dentro do período noturno o display volta a dormir após TIMEOUT_MS
+    if (isNightPeriod(currentTimeStr)) {
+        is_manual_mode = true;
+        manual_on_timestamp = millis();
+        Serial.println("Display ligado manualmente (Modo Timeout ativado).");
     }
+}
+
+void Hours_Time::manual_turn_off() {
+    is_manual_mode = false;
+    notificar(true);
 }
 
 void Hours_Time::monitorarConexao() {

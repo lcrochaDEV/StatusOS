@@ -6,14 +6,16 @@
 
 class FileSystemControll : public IBrightnessControl {
 private:
-    static const uint8_t PIN_BACKLIGHT = 21; // Pino GPIO 21
-    static const uint32_t PWM_FREQ = 5000;    // 5 kHz
-    static const uint8_t PWM_RES = 8;         // 8 bits (0 a 255)
-    static const uint8_t PWM_CHANNEL = 0;     // Canal PWM
+    static const uint8_t PIN_BACKLIGHT = 21;    // Pino GPIO 21
+    static const uint32_t PWM_FREQ = 5000;      // 5 kHz
+    static const uint8_t PWM_RES = 8;           // 8 bits (0 a 255)
+    static const uint8_t PWM_CHANNEL = 0;       // Canal PWM
 
-    uint8_t brilho_atual_pct = 80;            // Valor padrão inicial (80%)
-    uint8_t pwm_atual = 0;                    // Último valor PWM escrito no pino (0 a 255)
+    uint8_t brilho_atual_pct = 80;              // Valor padrão inicial (80%)
+    uint8_t pwm_atual = 0;                      // Último valor PWM escrito no pino (0 a 255)
     bool iniciado = false;
+    uint8_t brilho_antes_de_apagar = 80;      // Brilho (%) memorizado ao apagar, restaurado ao ligar
+    bool display_apagado = false;             // true somente enquanto displayOff() mantém o backlight apagado
 
 public:
     FileSystemControll();
@@ -42,8 +44,20 @@ public:
         setPinPwm(valor);
     }
 
-    uint8_t obterPwm() const {
-        return pwm_atual;
+    uint8_t obterPwm() const return pwm_atual;
+    
+    // Apaga o backlight memorizando o brilho atual
+    void displayOff() override {
+        if (brilho_atual_pct > 0) brilho_antes_de_apagar = brilho_atual_pct;
+        setBrilhoPorcentagem(0);
+        display_apagado = true;
+    }
+
+    // Restaura o brilho memorizado (só se displayOff() apagou o display)
+    void displayOn() override {
+        if (!display_apagado) return;
+        display_apagado = false;
+        setBrilhoPorcentagem(brilho_antes_de_apagar);
     }
 };
 
