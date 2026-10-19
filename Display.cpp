@@ -31,11 +31,25 @@ void Display::my_disp_flush(lv_display_t *disp, const lv_area_t *area, uint8_t *
 bool Display::begin() {
     if (disp != nullptr) return true; 
 
-    // 1. Configuração do pino de PWM do Backlight (GPIO 21)
+    // 1. Configuração obrigatória do pino de hardware (Mantido conforme solicitado)
     pinMode(_backlightPin, OUTPUT);
-    setBrightness(_currentBrightness); // Inicia em 100% (255)
 
-    // 2. Alocação do buffer para LVGL v9 na Heap Dinâmica
+    // CONTROLE DE FLUXO PRIORITÁRIO:
+    // Pega o valor real de 80% configurado e autorizado na classe FileSystemControll
+    uint8_t brilhoInicial = g_file_system_ctrl.obterBrilhoPorcentagem();
+    
+    // Mapeia de porcentagem (0-100) para PWM de 8 bits (0-255) para o Display obedecer
+    uint8_t pwmMapeado = (brilhoInicial * 255) / 100;
+    
+    // Aplica o valor de 80% convertido no display ao iniciar ou reiniciar
+    setBrightness(pwmMapeado);
+
+// Inicialização correta usando o membro _tft da classe Display
+    _tft.init();
+    _tft.setRotation(1);
+    _tft.invertDisplay(false);
+    
+    // 3. Alocação do buffer para LVGL v9
     if (draw_buf == nullptr) {
         draw_buf = static_cast<uint8_t *>(heap_caps_malloc(DRAW_BUF_SIZE, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
         if (draw_buf == nullptr) {
@@ -44,7 +58,7 @@ bool Display::begin() {
         }
     }
 
-    // 3. Configuração do LVGL v9
+    // 4. Configuração do LVGL v9
     lv_init();
 
     disp = lv_display_create(320, 240);

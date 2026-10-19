@@ -180,6 +180,7 @@ void Console::commands_envio(const String& command) {
     {"FORADOAR",  &Console::cmdForaDoAr},
     {"WAKE",      &Console::cmdWake},
     {"CLEAR",     &Console::cmdClear},
+    {"CLS",       &Console::cmdClear},
   };
 
   for (const CommandEntry& entry : commands) {
@@ -218,7 +219,8 @@ void Console::cmdHelp(const String& param) {
     "FORADOAR           - Executa a animação Fora do Ar (3 s)\n"
     "STOP               - Para a animação/teste e retorna ao dashboard\n"
     "WAKE               - Liga o display manualmente no período noturno (timeout de 5 min)"
-    "CLEAR              - Limpar terminal"
+    "CLEAR              - Limpa as linhas e o conteúdo visível do terminal\n"
+    "CLS                - Limpa as linhas e o conteúdo visível do terminal\n"
   );
 }
 
@@ -366,7 +368,7 @@ void Console::cmdDisplayOn(const String& param) {
   if (horario != nullptr) {
     horario->manual_turn_on(); // No período noturno volta a dormir em 5 minutos
   } else if (_brightness != nullptr) {
-    _brightness->displayOn();
+    _brightness->displayOn(); // Restaura o brilho memorizado no FileSystemControll
   } else {
     menssageViewMsg("[Console] Erro: Controle de brilho não registrado.");
     return;
@@ -381,7 +383,7 @@ void Console::cmdDisplayOff(const String& param) {
   if (horario != nullptr) {
     horario->manual_turn_off();
   } else if (_brightness != nullptr) {
-    _brightness->displayOff();
+    _brightness->displayOff(); // Apaga o backlight zerando o PWM via FileSystemControll
   } else {
     menssageViewMsg("[Console] Erro: Controle de brilho não registrado.");
     return;
@@ -390,15 +392,13 @@ void Console::cmdDisplayOff(const String& param) {
   menssageViewMsg("[Console] Display desligado.");
 }
 
-void Console::cmdWake(const String& args) {
+void Console::cmdWake(const String& param) {
     // Handle the WAKE command here
 }
 
-void Console::cmdClear(const String& args) {
-    Serial.write(27);      // Caractere ESC (ASCII 27)
-    Serial.print("[2J");   // Comando ANSI para limpar a tela
-    Serial.write(27);      // Caractere ESC
-    Serial.print("[H");    // Comando ANSI para mover o cursor para o topo
+void Console::cmdClear(const String& param) {
+    (void)param;
+    Serial.print("\033[2J\033[H");
+    menssageViewMsg("[Console] Terminal limpo com sucesso.");
 }
-
 

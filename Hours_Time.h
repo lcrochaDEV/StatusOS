@@ -9,6 +9,7 @@
 
 #include <Arduino.h>
 #include <functional>
+#include <mutex>
 #include "ConsoleDependencies.h"
 
 class Hours_Time {
@@ -28,6 +29,9 @@ class Hours_Time {
     // Getters
     const char* getHoursSleep() const;    // Retorna a hora de dormir como string (ex: "22:00")
     const char* getHoursWakeon() const;   // Retorna a hora de acordar como string (ex: "06:00")
+    // Cópias seguras entre tasks (o servidor web roda na task do AsyncTCP e os ponteiros acima só valem na task principal)
+    void getHoursSleep(String& out) const;
+    void getHoursWakeon(String& out) const;
 
     // Setters para atualização dinâmica via Web API
     void setHoursSleep(const String& sleep_time);
@@ -61,6 +65,7 @@ class Hours_Time {
     int _night_state = -1;                        // -1 = desconhecido, 0 = dia, 1 = período noturno
     IBrightnessControl* _brightness = nullptr;
     static Hours_Time* _instance;
+    mutable std::recursive_mutex _schedule_mutex;   // Protege hours_sleep, hours_wakeon e _night_state (servidor web x loop)
 
     // Novo: Flag que indica se o display está em modo de timeout (ligado manualmente)
     bool is_manual_mode = false;          // Novo: Armazena a hora (em milissegundos) em que o display foi ligado manualmente

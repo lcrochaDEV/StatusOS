@@ -70,7 +70,7 @@ class Console {
     void cmdLogOff(const String& param);  //DESATIVA OS LOGS CONTINUOS
     void cmdWake(const String& param);
     
-    virtual void cmdClear(const String& args);
+    virtual void cmdClear(const String& param);
     bool animationReady();
     
     void limparTerminal();

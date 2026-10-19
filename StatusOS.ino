@@ -52,7 +52,7 @@ void setup() {
     // 1. Inicializa o Display primeiro
     if (!display.begin()) {
         Serial.println("[ERRO] Sistema travado devido a falha no Display.");
-        while (1) { delay(1000); }
+        while (1) { vTaskDelay(pdMS_TO_TICKS(1000)); }
     }
     
     // 2. Inicialização do módulo de Animações

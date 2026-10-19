@@ -449,6 +449,8 @@ inline void ui_fechar_popup_brilho(){ g_dashboard.fechar_popup_brilho(); }
 inline bool ui_popup_wifi_aberto()   { return g_dashboard.popup_wifi_aberto(); }
 inline bool ui_popup_brilho_aberto() { return g_dashboard.popup_brilho_aberto(); }
 
+
+
 inline void update_telemetry_data(const char* host, const char* os_name, const char* kernel, 
                                   float temp, float cpu_load, int ram_pct, int disk_pct, 
                                   const char* uptime, const void* logo_url, float cpu_cores = 4.0f) {

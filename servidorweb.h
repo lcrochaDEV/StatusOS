@@ -22,8 +22,6 @@ inline AsyncWebServer server(80);
 inline AsyncWebSocket ws("/ws");
 
 inline volatile bool g_webserver_state = true;
-inline String g_wake_up_time = "07:00";
-inline String g_sleep_time = "22:00";
 
 // Alterações de configuração recebidas em /api/config são aplicadas na task principal (process_web_server_tasks)
 inline volatile bool g_config_dirty = false;
@@ -37,14 +35,25 @@ inline void load_config_from_nvs() {
     Preferences preferences;
     if (!preferences.begin(PREFS_NAMESPACE, true)) return;
 
+    // O padrão dos horários é o valor atual do relógio (Hours_Time é a fonte única)
+    String wake;
+    String sleep;
+    Hours_Time* clock = Hours_Time::instance();
+    if (clock != nullptr) {
+        clock->getHoursWakeon(wake);
+        clock->getHoursSleep(sleep);
+    }
+
     g_webserver_state = preferences.getBool("webserver", g_webserver_state);
-    String wake = preferences.getString("wake", g_wake_up_time);
-    String sleep = preferences.getString("sleep", g_sleep_time);
+    wake = preferences.getString("wake", wake);
+    sleep = preferences.getString("sleep", sleep);
     preferences.end();
 
-    std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
-    if (Hours_Time::isValidTimeFormat(wake.c_str())) g_wake_up_time = wake;
-    if (Hours_Time::isValidTimeFormat(sleep.c_str())) g_sleep_time = sleep;
+    // Os setters descartam horários inválidos
+    if (clock != nullptr) {
+        clock->setHoursWakeon(wake);
+        clock->setHoursSleep(sleep);
+    }
 }
 
 inline void save_config_to_nvs() {
@@ -53,24 +62,18 @@ inline void save_config_to_nvs() {
 
     String wake;
     String sleep;
-    {
-        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
-        wake = g_wake_up_time;
-        sleep = g_sleep_time;
+    Hours_Time* clock = Hours_Time::instance();
+    if (clock != nullptr) {
+        clock->getHoursWakeon(wake);
+        clock->getHoursSleep(sleep);
     }
 
     preferences.putBool("webserver", g_webserver_state);
-    preferences.putString("wake", wake);
-    preferences.putString("sleep", sleep);
+    if (clock != nullptr) {
+        preferences.putString("wake", wake);
+        preferences.putString("sleep", sleep);
+    }
     preferences.end();
-}
-
-// Entrega os horários ao relógio (Hours_Time), que registra a própria instância
-inline void apply_schedule_to_clock(const String& sleep_time, const String& wake_time) {
-    Hours_Time* clock = Hours_Time::instance();
-    if (clock == nullptr) return;
-    clock->setHoursSleep(sleep_time);
-    clock->setHoursWakeon(wake_time);
 }
 
 // --------------------------------------------------
@@ -139,8 +142,13 @@ inline String processor(const String& var) {
     if(var == "WEBSERVER_STATE") return g_webserver_state ? "checked" : "";
 
     if(var == "WAKE_TIME_VALUE" || var == "SLEEP_TIME_VALUE") {
-        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
-        return (var == "WAKE_TIME_VALUE") ? g_wake_up_time : g_sleep_time;
+        String value;
+        Hours_Time* clock = Hours_Time::instance();
+        if (clock != nullptr) {
+            if (var == "WAKE_TIME_VALUE") clock->getHoursWakeon(value);
+            else clock->getHoursSleep(value);
+        }
+        return value;
     }
 
     return String("");
@@ -309,25 +317,22 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
     }
 
     if (has_wake || has_sleep) {
-        std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
-        if (has_wake) g_wake_up_time = doc["wake_time"].as<String>();
-        if (has_sleep) g_sleep_time = doc["sleep_time"].as<String>();
+        // Hours_Time é a fonte única dos horários (os setters são protegidos por mutex)
+        Hours_Time* clock = Hours_Time::instance();
+        if (clock != nullptr) {
+            if (has_wake) clock->setHoursWakeon(doc["wake_time"].as<String>());
+            if (has_sleep) clock->setHoursSleep(doc["sleep_time"].as<String>());
+        }
     }
 
-    g_config_dirty = true; // Aplicado e persistido na task principal
+    g_config_dirty = true; // Persistido na task principal
 
     request->send(200, "application/json", "{\"status\":\"sucess\"}");
 }
 
 inline void setup_web_server() {
-    // Horários: valores do relógio -> sobrescritos pelos salvos na NVS -> devolvidos ao relógio
-    Hours_Time* clock = Hours_Time::instance();
-    if (clock != nullptr) {
-        g_wake_up_time = clock->getHoursWakeon();
-        g_sleep_time = clock->getHoursSleep();
-    }
+    // Horários: valores do relógio -> sobrescritos pelos salvos na NVS (aplicados direto no Hours_Time)
     load_config_from_nvs();
-    apply_schedule_to_clock(g_sleep_time, g_wake_up_time);
 
     // CORS só é habilitado quando uma origem é definida em CORS_ALLOW_ORIGIN (SecurityConfig.h)
     if (strlen(CORS_ALLOW_ORIGIN) > 0) {
@@ -390,19 +395,9 @@ inline void setup_web_server() {
 inline void process_web_server_tasks() {
     ws.cleanupClients();
 
-    // Aplica na task principal as alterações de /api/config (evita corrida com Hours_Time)
+    // Persiste na task principal as alterações de /api/config (a escrita na NVS não roda na task do AsyncTCP)
     if (g_config_dirty) {
         g_config_dirty = false;
-
-        String sleep_time;
-        String wake_time;
-        {
-            std::lock_guard<std::recursive_mutex> lock(g_telemetry_mutex);
-            sleep_time = g_sleep_time;
-            wake_time = g_wake_up_time;
-        }
-
-        apply_schedule_to_clock(sleep_time, wake_time);
         save_config_to_nvs();
     }
 

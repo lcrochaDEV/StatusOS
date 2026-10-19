@@ -24,8 +24,19 @@ const char* Hours_Time::getHoursWakeon() const {
 const char* Hours_Time::getHoursSleep() const {
     return hours_sleep.c_str();
 }
+
+void Hours_Time::getHoursSleep(String& out) const {
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex);
+    out = hours_sleep;
+}
+
+void Hours_Time::getHoursWakeon(String& out) const {
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex);
+    out = hours_wakeon;
+}
 void Hours_Time::setHoursSleep(const String& sleep_time) {
     if (!isValidTimeFormat(sleep_time.c_str())) return;
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex);
     this->hours_sleep = sleep_time;
     _night_state = -1; // Reavalia o período na próxima checagem
     //Serial.printf("[Hours_Time] Novo horário de sleep configurado: %s\n", this->hours_sleep.c_str());
@@ -33,6 +44,7 @@ void Hours_Time::setHoursSleep(const String& sleep_time) {
 
 void Hours_Time::setHoursWakeon(const String& wake_time) {
     if (!isValidTimeFormat(wake_time.c_str())) return;
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex);
     this->hours_wakeon = wake_time;
     _night_state = -1; // Reavalia o período na próxima checagem
     //Serial.printf("[Hours_Time] Novo horário de wakeon configurado: %s\n", this->hours_wakeon.c_str());
@@ -94,6 +106,7 @@ bool Hours_Time::isValidTimeFormat(const char* hhmm) {
 }
 
 bool Hours_Time::isNightPeriod(const char* hhmm) const {
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex);
     int ordem = strncmp(hours_sleep.c_str(), hours_wakeon.c_str(), 5);
     if (ordem == 0) return false; // Janela vazia
 
@@ -117,6 +130,8 @@ void Hours_Time::weke_on() {
 
     char currentTimeStr[6]; 
     strftime(currentTimeStr, sizeof(currentTimeStr), "%H:%M", &timeinfo);
+
+    std::lock_guard<std::recursive_mutex> lock(_schedule_mutex); // Horários podem ser alterados pelo servidor web
 
     // -------------------------------------------------------------------------
     // CONTROLE DE TIMEOUT (MODO MANUAL)

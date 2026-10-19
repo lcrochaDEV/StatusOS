@@ -55,7 +55,6 @@ public:
         display_apagado = true;
     }
 
-    // Restaura o brilho memorizado (só se displayOff() apagou o display)
     void displayOn() override {
         if (!display_apagado) return;
         display_apagado = false;
