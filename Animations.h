@@ -30,6 +30,7 @@ public:
     //GIFs LIST
     void testRedScreen() override;
     void foraDoAr() override;
+    //void ps1() override;
 
 private:
     TFT_eSPI& _tft;

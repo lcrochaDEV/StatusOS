@@ -178,6 +178,7 @@ void Console::commands_envio(const String& command) {
     {"STOPGIF",   &Console::cmdStop},
     {"DASHBOARD", &Console::cmdStop},
     {"FORADOAR",  &Console::cmdForaDoAr},
+    {"PS1",  &Console::cmdPs1},
     {"WAKE",      &Console::cmdWake},
     {"CLEAR",     &Console::cmdClear},
     {"CLS",       &Console::cmdClear},
@@ -301,16 +302,18 @@ void Console::cmdLogo(const String& param) {
   (void)param;
   if (!animationReady()) return;
 
-  menssageViewMsg("[Console] Executando animação PS1 Startup...");
+  menssageViewMsg("[Console] Executando Logo...");
   _anim->playAnimation(GifID::BOOT);
 }
 
+
 void Console::cmdAnimacao(const String& param) {
+  (void)param;
   if (!animationReady()) return;
 
   bool started = true;
   if (param == "BOOT" || param == "PS1") {
-    menssageViewMsg("[Console] Executando animação PS1 Startup...");
+    menssageViewMsg("[Console] Executando Logo...");
     started = _anim->playAnimation(GifID::BOOT);
   } else if (param == "NOTWIFI" || param == "WIFI") {
     menssageViewMsg("[Console] Executando animação: Sem Wi-Fi...");
@@ -360,6 +363,20 @@ void Console::cmdForaDoAr(const String& param) {
     _anim->foraDoAr(); // Executa o teste na classe Animations
   }
 }
+
+void Console::cmdPs1(const String& param) {
+  (void)param;
+  if (!animationReady()) return;
+
+  if (_anim->isPlaying() && _anim->getCurrentAnimation() == GifID::PS1) {
+    _anim->stop();
+  } else {
+    menssageViewMsg("[Console] Executando animação PS1...");
+    //_anim->ps1(); // Executa o teste na classe Animations
+  }
+}
+
+
 
 // DISPLAYON/DISPLAYOFF passam pelo Hours_Time (quando existe) para respeitar o período noturno
 void Console::cmdDisplayOn(const String& param) {

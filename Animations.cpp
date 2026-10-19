@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include "ciclope.h"
 #include "foradoar.h"
+//#include "PS1_Startup.h"
 
 static TFT_eSPI* pTftInstance = nullptr;
 
@@ -258,3 +259,24 @@ void Animations::atualizarForaDoAr() {
 
     yield(); // Alimenta o Watchdog do ESP32 e mantém as conexões de rede ativas
 }
+
+// Avança a animação "Fora do Ar" de forma não bloqueante (chamado por update())
+/*void Animations::ps1() {
+    uint32_t agora = millis();
+
+    // Micro-espera interna de 50ms para controlar o FPS de forma não-bloqueante ao chip
+    if (agora - _foraLastFrameMs < FORA_DO_AR_FRAME_MS) return;
+    _foraLastFrameMs = agora;
+
+    // Desenha o frame atual na tela (320x240 pixels)
+    // O swap de bytes é restaurado para não afetar as demais telas (ex.: BOOT)
+    bool swapAnterior = _tft.getSwapBytes();
+    _tft.setSwapBytes(true); 
+    _tft.pushImage(0, 0, 320, 240, PS1_Startup[_foraFrame]);
+    _tft.setSwapBytes(swapAnterior);
+
+    // Avança cíclica e infinitamente para o próximo quadro da animação
+    _foraFrame = (_foraFrame + 1) % _foraTotalFrames;
+
+    yield(); // Alimenta o Watchdog do ESP32 e mantém as conexões de rede ativas
+}*/

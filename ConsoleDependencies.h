@@ -10,7 +10,8 @@ enum class GifID {
     NOT_WORKER, //SEM USO
     BUG_FRAME,  //SEM USO
     STANDBY,    //SEM USO
-    FORA_DO_AR     
+    FORA_DO_AR,
+    PS1 
 };
 
 // Interfaces mínimas consumidas pelo Console (inversão de dependência).
@@ -21,6 +22,7 @@ class IAnimationControl {
         virtual void stop() = 0;
         virtual void testRedScreen() = 0;
         virtual void foraDoAr() = 0;
+        //virtual void ps1() = 0;
         virtual bool isPlaying() const = 0;
         virtual GifID getCurrentAnimation() const = 0;
 };
