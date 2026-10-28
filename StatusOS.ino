@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include "WifiConnect.h"
 #include "Display.h"
 #include "ui_dashboard.h"
 
@@ -48,11 +47,6 @@ bool atualizarServidorWeb() {
         if (!rotasRegistradas) {
             setup_web_server();   // Registra as rotas e inicia (server.begin()) uma única vez
             rotasRegistradas = true;
-
-            // Diagnóstico: registra no serial cada requisição HTTP que chega ao módulo (IP de origem, método e rota)
-            static AsyncLoggingMiddleware requisicoesHttp;
-            requisicoesHttp.setOutput(Serial);
-            server.addMiddleware(&requisicoesHttp);
         } else {
             server.begin();       // Retoma o servidor já configurado
         }
@@ -60,37 +54,30 @@ bool atualizarServidorWeb() {
         inicioServidorMs = millis();
         ultimaTentativaBindMs = millis();
         Serial.printf("[StatusOS] Servidor Web ativo em http://%s\n", WifiConnect::obtainIP());
-        Serial.printf("[StatusOS] Telemetria: %s\n", g_webserver_state ? "habilitada" : "SUSPENSA (g_webserver_state=false na NVS)");
     } else if (conectado && servidorAtivo && millis() - inicioServidorMs < janelaBindMs && millis() - ultimaTentativaBindMs >= intervaloBindMs) {
-        // A porta 80 só abre quando o lwIP libera as conexões do Portal AP (TIME_WAIT): o begin() é repetido
-        // a cada 1 s durante a janela e não faz nada quando o servidor já está escutando
+        // Após um portal sem configuração, a porta 80 pode demorar a liberar no lwIP (TIME_WAIT):
+        // o begin() é repetido na janela e não faz nada quando o servidor já está escutando
         ultimaTentativaBindMs = millis();
         server.begin();
     } else if (!conectado && servidorAtivo) {
         ws.closeAll();
         server.end();             // Libera a porta 80 para o Portal AP
         servidorAtivo = false;
-        Serial.println("[StatusOS] Sem conexão. Servidor Web em standby.");
     }
     return servidorAtivo;
 }
 
-// Acompanha mudanças de conexão após o boot (ex.: rede configurada pelo Portal AP) e sincroniza a interface
+// Acompanha mudanças de conexão após o boot e sincroniza a interface
 void atualizarStatusRede() {
-    static bool online = wifiConnect.checkStatus();
+    static bool online = (wifiConnect.getState() == WifiState::Connected) && (WiFi.status() == WL_CONNECTED);
 
     bool conectado = (wifiConnect.getState() == WifiState::Connected) && (WiFi.status() == WL_CONNECTED);
 
     if (conectado && !online) {
-        Serial.println("[StatusOS] Conectado! Fechando pop-up de aviso e iniciando serviços...");
-        Serial.println("[StatusOS] (1/3) Fechando pop-up de aviso...");
         ui_fechar_popup_aviso_rede();
-        Serial.println("[StatusOS] (2/3) Configurando NTP...");
         hours_Time_exec.time_server();
-        Serial.println("[StatusOS] (3/3) Atualizando status da interface...");
         update_status(true);
         online = true;
-        Serial.println("[StatusOS] Interface sincronizada com a rede.");
     } else if (!conectado && online) {
         update_status(false);
         online = false;
@@ -154,6 +141,7 @@ void setup() {
         //anim.playAnimation(GifID::NOT_WIFI);
     } else {
         Serial.println("[StatusOS] Conectado! Sincronizando NTP e iniciando serviços...");
+        
         hours_Time_exec.time_server();                                
 
         create_dashboard_ui(); 

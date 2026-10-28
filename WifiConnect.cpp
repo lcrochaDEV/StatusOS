@@ -15,11 +15,6 @@ static WiFiManager wm;
 static bool portalAtivo = false;
 static volatile uint8_t motivoDesconexao = 0; // Último motivo de queda do STA (evento do Wi-Fi)
 
-// Ciclo do rádio após o Portal AP (substitui reboot): desliga o Wi-Fi, aguarda e religa em STA limpo
-static bool reiniciandoRadio = false;
-static uint32_t tempoRadioOff = 0;
-static const uint32_t intervaloRadioOffMs = 300;
-
 WifiConnect::WifiConnect(const char* ssid, const char* password)
   : ssid(ssid), password(password) {
     if (ssid && strlen(ssid) > 0) {
@@ -30,6 +25,7 @@ WifiConnect::WifiConnect(const char* ssid, const char* password)
     }
 }
 
+// Extrai o MAC do Hardware diretamente (Imune a falhas de inicialização do rádio)
 void WifiConnect::extrairMacHardware(char* bufferOut, size_t bufferSize) {
 #if defined(ESP32)
     uint8_t macBase[6];
@@ -77,14 +73,13 @@ void WifiConnect::salvarCredenciais() {
 }
 
 void WifiConnect::clearCredentials() {
-    Serial.println("\n[Wi-Fi] Solicitação de limpeza de credenciais recebida!");
+    Serial.println("[Wi-Fi] Credenciais apagadas. Abrindo Access Point...");
 
     Preferences prefs;
     if (prefs.begin(NVS_WIFI_NAMESPACE, false)) {
         prefs.remove(NVS_WIFI_KEY_SSID);
         prefs.remove(NVS_WIFI_KEY_PASS);
         prefs.end();
-        Serial.println("[Wi-Fi] Credenciais apagadas da memória Flash com sucesso.");
     }
 
     ssidBuffer[0] = '\0';
@@ -112,20 +107,18 @@ void WifiConnect::begin() {
 
     if (carregarCredenciais()) {
         credenciaisConfirmadas = true;
-        Serial.println("[Wi-Fi] Credenciais carregadas da memória. Conectando manualmente...");
         connectManual();
     } else if (possuiCredenciais()) {
         // Só são gravadas na memória após a primeira conexão bem-sucedida (ver loop)
         connectManual();
     } else {
-        Serial.println("[Wi-Fi] Nenhuma credencial encontrada. Abrindo Access Point...");
         startAccessPoint();
     }
 }
 
+// Inicializa a tentativa de conexão manual de forma ASSÍNCRONA
 void WifiConnect::connectManual() {
     if (ssid == nullptr || strlen(ssid) == 0) {
-        Serial.println("[Wi-Fi] Erro: SSID não fornecido.");
         startAccessPoint();
         return;
     }
@@ -145,7 +138,6 @@ void WifiConnect::connectManual() {
 void WifiConnect::avaliarFalhaDeConexao() {
     // Nunca conectou: qualquer falha abre o Access Point para configurar a rede
     if (!credenciaisConfirmadas) {
-        Serial.println("[Wi-Fi] Falha na primeira conexão. Abrindo Access Point...");
         startAccessPoint();
         return;
     }
@@ -161,65 +153,40 @@ void WifiConnect::avaliarFalhaDeConexao() {
 
     falhasCredencial++;
     if (falhasCredencial >= limiteFalhasCredencial) {
-        Serial.println("[Wi-Fi] Credenciais rejeitadas repetidamente. Abrindo Access Point...");
         startAccessPoint();
     }
 }
 
+// Processamento Não Bloqueante executado continuamente no loop()
 void WifiConnect::loop() {
-    // Aguarda o rádio desligado (não bloqueante) e retoma pelo fluxo normal de conexão, igual ao boot
-    if (reiniciandoRadio) {
-        if (millis() - tempoRadioOff >= intervaloRadioOffMs) {
-            reiniciandoRadio = false;
-            connectManual();
-        }
-        return;
-    }
-
     // Portal ativo: processa o WiFiManager de forma não bloqueante (display e web continuam rodando)
     if (portalAtivo) {
         wm.process();
 
-        // Verifica se o WiFiManager terminou com sucesso (conectado à rede alvo)
-        // Usamos wm.getConfigPortalActive() ou verificamos se o IP foi atribuído no modo STA
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("[Wi-Fi] Configuração via Portal AP concluída com sucesso!");
-            
-            // 1. Salva imediatamente as credenciais validadas na NVS antes de mexer no rádio
+            // Rede configurada no portal: grava as credenciais e reinicia uma única vez. As conexões HTTP do
+            // portal deixam a porta 80 ocupada no lwIP (TIME_WAIT), o que impediria o servidor web de abrir.
             snprintf(ssidBuffer, sizeof(ssidBuffer), "%s", WiFi.SSID().c_str());
             snprintf(passwordBuffer, sizeof(passwordBuffer), "%s", WiFi.psk().c_str());
             ssid = ssidBuffer;
             password = passwordBuffer;
             salvarCredenciais();
-            credenciaisConfirmadas = true;
-            falhasCredencial = 0;
 
-            // 2. Encerra o portal e o A.P., e cicla o rádio para sair do modo AP+STA com a pilha limpa
-            portalAtivo = false;
-
-            // Libera a porta 80 do portal para o servidor web (só se o WiFiManager ainda não o encerrou sozinho)
-            if (wm.getConfigPortalActive()) wm.stopConfigPortal();
-
-            WiFi.softAPdisconnect(true);
-            WiFi.disconnect(true);
-            WiFi.mode(WIFI_OFF);
-
-            estadoAtual = WifiState::Disconnected;
-            tempoRadioOff = millis();
-            reiniciandoRadio = true;
-        } 
+            Serial.println("[Wi-Fi] Rede configurada pelo Portal AP. Reiniciando...");
+            ESP.restart();
+        }
         else if (!wm.getConfigPortalActive()) {
-            Serial.println("[Wi-Fi] Tempo limite do Portal atingido. Retomando conexão manual...");
+            Serial.println("[Wi-Fi] Tempo limite do Portal atingido.");
             portalAtivo = false;
             estadoAtual = WifiState::Failure;
             ultimaTentativaReconexao = millis();
-            falhasCredencial = 0;
             WiFi.softAPdisconnect(true);
             WiFi.mode(WIFI_STA);
         }
         return;
     }
 
+    // 1. Monitora o processo de Conexão Ativa
     if (estadoAtual == WifiState::Connecting) {
         if (WiFi.status() == WL_CONNECTED) {
             estadoAtual = WifiState::Connected;
@@ -236,14 +203,15 @@ void WifiConnect::loop() {
             avaliarFalhaDeConexao();
         }
     } 
+    // 2. Reconexão Automática Passiva (Sem travar o processador)
     else if (estadoAtual == WifiState::Failure || (estadoAtual == WifiState::Connected && WiFi.status() != WL_CONNECTED)) {
         if (millis() - ultimaTentativaReconexao >= intervaloReconexaoMs) {
-            Serial.println("[Wi-Fi] Tentando reconectar à rede...");
             connectManual();
         }
     }
 }
 
+// Portal de Configuração com liberação de recursos
 void WifiConnect::startAccessPoint(const char* apPassword, uint32_t timeoutSegundos) {
     if (portalAtivo) return; // Portal já aberto
 
@@ -251,9 +219,10 @@ void WifiConnect::startAccessPoint(const char* apPassword, uint32_t timeoutSegun
 
     WiFi.disconnect();
 
+    // Configura o portal de forma profissional
     wm.setDebugOutput(false);
     wm.setConfigPortalBlocking(false); // Não trava o loop(): LVGL e servidor seguem rodando
-    wm.setConfigPortalTimeout(timeoutSegundos);
+    wm.setConfigPortalTimeout(timeoutSegundos); // Não fica travado para sempre se ninguém conectar
 
     char macStr[13];
     extrairMacHardware(macStr, sizeof(macStr));
@@ -297,6 +266,9 @@ WifiState WifiConnect::getState() const {
     return estadoAtual;
 }
 
+// ==========================================
+// MÉTODOS ESTÁTICOS DE CONSULTA (Para a UI)
+// ==========================================
 const char* WifiConnect::obtainIP() {
     static char ip_str[16];
     if (portalAtivo) snprintf(ip_str, sizeof(ip_str), "%s", WiFi.softAPIP().toString().c_str());
