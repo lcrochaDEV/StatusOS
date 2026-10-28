@@ -219,7 +219,7 @@ void Console::cmdHelp(const String& param) {
     "TESTRED            - Liga/desliga a tela vermelha de teste\n"
     "FORADOAR           - Executa a animação Fora do Ar (3 s)\n"
     "STOP               - Para a animação/teste e retorna ao dashboard\n"
-    "WAKE               - Liga o display manualmente no período noturno (timeout de 5 min)"
+    "WAKE               - Liga o display manualmente no período noturno (timeout de 5 min)\n"
     "CLEAR              - Limpa as linhas e o conteúdo visível do terminal\n"
     "CLS                - Limpa as linhas e o conteúdo visível do terminal\n"
   );

@@ -11,7 +11,6 @@
   #include <esp_mac.h>
 #endif
 
-// Estados da máquina de conexão assíncrona
 enum class WifiState {
   Disconnected,
   Connecting,
@@ -23,18 +22,16 @@ class WifiConnect {
   public:
     WifiConnect(const char* ssid = nullptr, const char* password = nullptr);
     
-    // Configuração e Conexão Inicial
+    void begin();
     void connectManual();
     void startAccessPoint(const char* apPassword = AP_PASSWORD_DEFAULT, uint32_t timeoutSegundos = 180);
+    void clearCredentials(); // Limpa as credenciais salvas via console/botão e abre o AP
     
-    // Máquina de Estados Não Bloqueante (Deve ser chamada periodicamente no loop principal)
     void loop();
 
-    // Métodos de Checagem e Status
     bool checkStatus();
     WifiState getState() const;
 
-    // Getters Globais (Zero Heap / Seguros para a UI)
     static const char* obtainIP();
     static const char* obtainMascara();
     static const char* obtainMacAddress();
@@ -42,17 +39,27 @@ class WifiConnect {
   private:
     const char* ssid; 
     const char* password;
+
+    char ssidBuffer[33] = {0};
+    char passwordBuffer[65] = {0};
     
     WifiState estadoAtual{WifiState::Disconnected};
     
-    // Controle Assíncrono por Tempo (Não Bloqueante)
     uint32_t tempoInicioConexao = 0;
-    const uint32_t timeoutConexaoMs = 15000; // 15 segundos para dar Timeout manual
+    const uint32_t timeoutConexaoMs = 15000;
     
     uint32_t ultimaTentativaReconexao = 0;
-    const uint32_t intervaloReconexaoMs = 10000; // Tenta reconectar a cada 10s se cair
+    const uint32_t intervaloReconexaoMs = 10000;
+
+    bool credenciaisConfirmadas = false;
+    uint8_t falhasCredencial = 0;
+    const uint8_t limiteFalhasCredencial = 3;
 
     void extrairMacHardware(char* bufferOut, size_t bufferSize);
+    bool possuiCredenciais() const;
+    bool carregarCredenciais();
+    void salvarCredenciais();
+    void avaliarFalhaDeConexao();
 };
 
 #endif // WIFICONNECT_H

@@ -42,6 +42,7 @@ private:
     // Popups e Diálogos Ativos
     lv_obj_t *msgbox_wifi = nullptr;
     lv_obj_t *msgbox_brilho = nullptr;
+    lv_obj_t *msgbox_aviso_rede = nullptr;
     lv_obj_t *label_brilho_pct = nullptr;
 
     // Componentes de Métricas (Arrays para iteração limpa)
@@ -89,7 +90,7 @@ private:
 
     // Helper genérico para botões de rodapé nos popups
     void setup_footer_button(lv_obj_t* msgbox, const char* text, lv_event_cb_t cb) {
-        lv_obj_t * btn = lv_msgbox_add_footer_button(msgbox, text);
+        lv_obj_t * btn = static_cast<lv_obj_t*>(lv_msgbox_add_footer_button(msgbox, text));
         if (btn) {
             lv_obj_set_style_bg_color(btn, UITheme::BORDER_ACTIVE, LV_PART_MAIN);
             lv_obj_set_style_text_color(btn, UITheme::TEXT_WHITE, LV_PART_MAIN);
@@ -186,6 +187,11 @@ private:
         if (ui) ui->fechar_popup_brilho();
     }
 
+    static void fechar_popup_aviso_rede_cb(lv_event_t * e) {
+        auto * ui = static_cast<DashboardUI*>(lv_event_get_user_data(e));
+        if (ui) ui->fechar_popup_aviso_rede();
+    }
+
 public:
     DashboardUI() = default;
 
@@ -274,9 +280,49 @@ public:
         }
     }
 
+    void mostrar_popup_aviso_rede() {
+        if (msgbox_aviso_rede != nullptr) {
+            lv_obj_clear_flag(msgbox_aviso_rede, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_move_foreground(msgbox_aviso_rede);
+            return;
+        }
+
+        msgbox_aviso_rede = create_base_popup("STATUS OS - REDE");
+        if (!msgbox_aviso_rede) return;
+
+
+        lv_obj_t *content = lv_msgbox_get_content(msgbox_aviso_rede);
+        if (content) {
+            lv_obj_set_style_bg_color(content, UITheme::CARD_BG, LV_PART_MAIN);
+            lv_obj_set_style_bg_opa(content, LV_OPA_COVER, LV_PART_MAIN); // O card interno continua opaco e legível
+            lv_obj_set_style_pad_all(content, 16, LV_PART_MAIN);
+            lv_obj_set_flex_flow(content, LV_FLEX_FLOW_COLUMN);
+            lv_obj_set_flex_align(content, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        }
+
+        lv_obj_t *text = lv_msgbox_add_text(msgbox_aviso_rede, "CONEXAO NECESSARIA\n\nConecte-se ao Access Point\npara configurar a internet.");
+        if (text) {
+            lv_obj_set_style_text_color(text, UITheme::TEXT_WHITE, LV_PART_MAIN);
+            lv_obj_set_style_text_align(text, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+        }
+
+        setup_footer_button(msgbox_aviso_rede, "OK", fechar_popup_aviso_rede_cb);
+        lv_obj_center(msgbox_aviso_rede);
+
+        lv_obj_move_foreground(msgbox_aviso_rede);
+    }
+
+    void fechar_popup_aviso_rede() {
+        if (msgbox_aviso_rede != nullptr) {
+            lv_obj_delete(msgbox_aviso_rede);
+            msgbox_aviso_rede = nullptr;
+        }
+    }
+
     // Estado real dos popups (fonte única de verdade; evita flags duplicadas no Console)
     bool popup_wifi_aberto() const { return msgbox_wifi != nullptr; }
     bool popup_brilho_aberto() const { return msgbox_brilho != nullptr; }
+    bool popup_aviso_rede_aberto() const { return msgbox_aviso_rede != nullptr; }
 
     void init() {
         lv_obj_t *scr = lv_screen_active();
@@ -446,8 +492,11 @@ inline void ui_abrir_popup_wifi()  { g_dashboard.mostrar_popup_wifi(); }
 inline void ui_fechar_popup_wifi() { g_dashboard.fechar_popup_wifi(); }
 inline void ui_abrir_popup_brilho() { g_dashboard.mostrar_popup_brilho(); }
 inline void ui_fechar_popup_brilho(){ g_dashboard.fechar_popup_brilho(); }
+inline void ui_abrir_popup_aviso_rede() { g_dashboard.mostrar_popup_aviso_rede(); }
+inline void ui_fechar_popup_aviso_rede() { g_dashboard.fechar_popup_aviso_rede(); }
 inline bool ui_popup_wifi_aberto()   { return g_dashboard.popup_wifi_aberto(); }
 inline bool ui_popup_brilho_aberto() { return g_dashboard.popup_brilho_aberto(); }
+inline bool ui_popup_aviso_rede_aberto() { return g_dashboard.popup_aviso_rede_aberto(); }
 
 
 

@@ -44,10 +44,11 @@ bool Display::begin() {
     // Aplica o valor de 80% convertido no display ao iniciar ou reiniciar
     setBrightness(pwmMapeado);
 
-// Inicialização correta usando o membro _tft da classe Display
+    // Inicialização correta usando o membro _tft da classe Display
     _tft.init();
-    _tft.setRotation(1);
-    _tft.invertDisplay(false);
+    _tft.setRotation(1);           // Ajuste para paisagem (0, 1, 2 ou 3)
+    _tft.invertDisplay(false);     // Experimente alterar para 'true' se estiver tudo cinza/branco
+    _tft.fillScreen(TFT_BLACK);    // Limpa a tela com preto para testar se o display responde
     
     // 3. Alocação do buffer para LVGL v9
     if (draw_buf == nullptr) {
