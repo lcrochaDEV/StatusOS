@@ -2,9 +2,9 @@
 
 
 #include <WiFi.h>
-#include "ciclope.h"
-#include "foradoar.h"
-//#include "PS1_Startup.h"
+#include "animes/ciclope.h"
+#include "animes/foradoar.h"
+//#include "animes/PS1_Startup.h"
 
 static TFT_eSPI* pTftInstance = nullptr;
 

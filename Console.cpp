@@ -155,33 +155,33 @@ void Console::commands_envio(const String& command) {
   Serial.println(command);
 
   static const CommandEntry commands[] = {
-    {"HELP",      &Console::cmdHelp},
+    {"HELP",        &Console::cmdHelp},
     // Controle de Logs
-    {"LOGON",     &Console::cmdLogOn},
-    {"LOGOFF",    &Console::cmdLogOff},
+    {"LOGON",       &Console::cmdLogOn},
+    {"LOGOFF",      &Console::cmdLogOff},
     // UI_DASHBOARD & POPUPS
-    {"SHOWWIFI",  &Console::cmdWifiPopup},
-    {"WIFI",      &Console::cmdWifiPopup},
-    {"SHOWBRIGHT", &Console::cmdBrightPopup},
-    {"BRIGHT",    &Console::cmdBright},
-    {"SETBRIGHT", &Console::cmdSetBrightness},
-    {"DISPLAYON", &Console::cmdDisplayOn},
-    {"DISPLAYOFF", &Console::cmdDisplayOff},
+    {"SHOWWIFI",    &Console::cmdWifiPopup},
+    {"WIFI",        &Console::cmdWifiPopup},
+    {"SHOWBRIGHT",  &Console::cmdBrightPopup},
+    {"BRIGHT",      &Console::cmdBright},
+    {"SETBRIGHT",   &Console::cmdSetBrightness},
+    {"DISPLAYON",   &Console::cmdDisplayOn},
+    {"DISPLAYOFF",  &Console::cmdDisplayOff},
     // COMANDOS DE ACIONAMENTO DE ANIMAÇÕES
-    {"LOGO",       &Console::cmdLogo},
-    {"ANIMACAO",  &Console::cmdAnimacao},
-    {"GIF",       &Console::cmdAnimacao},
-    {"TESTRED",   &Console::cmdTestRed},
-    {"RED",       &Console::cmdTestRed},
+    {"LOGO",        &Console::cmdLogo},
+    {"ANIMACAO",    &Console::cmdAnimacao},
+    {"GIF",         &Console::cmdAnimacao},
+    {"TESTRED",     &Console::cmdTestRed},
+    {"RED",         &Console::cmdTestRed},
     // COMANDO PARA PARAR A ANIMAÇÃO OU TESTE E RETORNAR AO DASHBOARD
-    {"STOP",      &Console::cmdStop},
-    {"STOPGIF",   &Console::cmdStop},
-    {"DASHBOARD", &Console::cmdStop},
-    {"FORADOAR",  &Console::cmdForaDoAr},
-    {"PS1",  &Console::cmdPs1},
-    {"WAKE",      &Console::cmdWake},
-    {"CLEAR",     &Console::cmdClear},
-    {"CLS",       &Console::cmdClear},
+    {"STOP",        &Console::cmdStop},
+    {"STOPGIF",     &Console::cmdStop},
+    {"DASHBOARD",   &Console::cmdStop},
+    {"FORADOAR",    &Console::cmdForaDoAr},
+    {"PS1",         &Console::cmdPs1},
+    {"WAKE",        &Console::cmdWake},
+    {"CLEAR",       &Console::cmdClear},
+    {"CLS",         &Console::cmdClear},
   };
 
   for (const CommandEntry& entry : commands) {
@@ -312,9 +312,12 @@ void Console::cmdAnimacao(const String& param) {
   if (!animationReady()) return;
 
   bool started = true;
-  if (param == "BOOT" || param == "PS1") {
+  if (param == "BOOT") {
     menssageViewMsg("[Console] Executando Logo...");
     started = _anim->playAnimation(GifID::BOOT);
+  } else if (param == "PS1") {
+    menssageViewMsg("[Console] Executando animação PS1...");
+    started = _anim->playAnimation(GifID::PS1);
   } else if (param == "NOTWIFI" || param == "WIFI") {
     menssageViewMsg("[Console] Executando animação: Sem Wi-Fi...");
     started = _anim->playAnimation(GifID::NOT_WIFI);
