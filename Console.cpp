@@ -376,6 +376,7 @@ void Console::cmdPs1(const String& param) {
   } else {
     menssageViewMsg("[Console] Executando animação PS1...");
     //_anim->ps1(); // Executa o teste na classe Animations
+    //_anim->playAnimation(GifID::PS1);
   }
 }
 

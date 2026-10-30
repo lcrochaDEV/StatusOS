@@ -1,22 +1,40 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# Script: telemetry_deb_13.sh
+# Script: telemetry.sh
 # Descrição: Coletor de telemetria nativo em Bash adaptado ao novo schema JSON
-#            com Auto-Discovery e verificação completa de discos físicos no SO.
+#            com Auto-Discovery, verificação completa de discos físicos no SO
+#            e detecção automática do sistema operacional (Raspberry/Ubuntu/Debian/Linux).
+#            Unifica as versões telemetry_deb_13.sh e telemetry_rasp.sh.
 # ==============================================================================
 
 set -euo pipefail
 LC_ALL=C # Força separador decimal padrão (ponto)
 
 # ------------------------------------------------------------------------------
+# Logging e Validações
+# ------------------------------------------------------------------------------
+log_info()  { printf "[INFO]  %s - %s\n" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >&2; }
+log_error() { printf "[ERROR] %s - %s\n" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >&2; }
+
+check_dependencies() {
+    if ! command -v curl &>/dev/null; then
+        log_error "Dependência ausente no sistema: curl"
+        exit 1
+    fi
+}
+
+# ------------------------------------------------------------------------------
 # Configurações Padrão & Variáveis de Ambiente
 # ------------------------------------------------------------------------------
 readonly DEFAULT_ENDPOINT="http://192.168.1.6/api/telemetry"
 readonly DEFAULT_TIMEOUT=5
-readonly DEFAULT_LOGO="https://cdn.iconscout.com/icon/free/png-256/free-debian-icon-svg-download-png-202378.png"
+readonly DEFAULT_LOGO="https://cdn-icons-png.flaticon.com/512/518/518713.png" # Logo Padrão/Genérica
+readonly DEFAULT_LOGO_DEBIAN="https://cdn.iconscout.com/icon/free/png-256/free-debian-icon-svg-download-png-202378.png"
 readonly DEFAULT_LOGO_UBUNTU="https://assets.ubuntu.com/v1/29383635-ubuntu-logo-2022.png"
 readonly DEFAULT_LOGO_RASPBERRY="https://www.raspberrypi.com/app/uploads/2020/06/raspberrry_pi_logo.png"
+readonly DEFAULT_LOGO_WINDOWS="https://upload.wikimedia.org/wikipedia/commons/6/6d/Windows_Logo_%281992-2001%29.svg"
+readonly DEFAULT_LOGO_LINUX="https://upload.wikimedia.org/wikipedia/commons/d/d6/Linux_mascot_tux.png"
 readonly DEFAULT_SERVER_NAME="Servidor-LNX"
 
 SERVER_NAME="${SERVER_NAME:-$DEFAULT_SERVER_NAME}"
@@ -43,19 +61,6 @@ source "$CONFIG_FILE"
 ENDPOINT_URL="${ENDPOINT_URL:-$DEFAULT_FALLBACK_ENDPOINT}"
 
 # ------------------------------------------------------------------------------
-# Logging e Validações
-# ------------------------------------------------------------------------------
-log_info()  { printf "[INFO]  %s - %s\n" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >&2; }
-log_error() { printf "[ERROR] %s - %s\n" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" "$*" >&2; }
-
-check_dependencies() {
-    if ! command -v curl &>/dev/null; then
-        log_error "Dependência ausente no sistema: curl"
-        exit 1
-    fi
-}
-
-# ------------------------------------------------------------------------------
 # Funções Coletoras de Dados
 # ------------------------------------------------------------------------------
 get_mac() {
@@ -77,17 +82,29 @@ get_id() {
 }
 
 get_os_info() {
-    local name="Linux" logo="$DEFAULT_LOGO"
+    local name="Linux" logo="$DEFAULT_LOGO" id="" id_like="" model=""
     if [[ -f /etc/os-release ]]; then
         name=$(source /etc/os-release 2>/dev/null && echo "$PRETTY_NAME") || name=$(uname -s)
+        id=$(source /etc/os-release 2>/dev/null && echo "${ID:-}") || id=""
+        id_like=$(source /etc/os-release 2>/dev/null && echo "${ID_LIKE:-}") || id_like=""
     else
         name=$(uname -s)
     fi
 
-    if [[ "$name" =~ [Uu]buntu ]]; then
-        logo="$DEFAULT_LOGO_UBUNTU"
-    elif [[ "$name" =~ [Rr]aspbian|[Rr]aspberry ]]; then
+    # O Raspberry Pi OS recente se identifica como Debian no os-release; o modelo vem do device-tree
+    if [[ -r /proc/device-tree/model ]]; then
+        model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "")
+    fi
+
+    # Detecção do SO (ordem: mais específico -> mais genérico)
+    if [[ "$model" =~ [Rr]aspberry ]] || [[ "$id" == "raspbian" ]] || [[ "$name" =~ [Rr]aspbian|[Rr]aspberry ]]; then
         logo="$DEFAULT_LOGO_RASPBERRY"
+    elif [[ "$id" == "ubuntu" ]] || [[ "$name" =~ [Uu]buntu ]]; then
+        logo="$DEFAULT_LOGO_UBUNTU"
+    elif [[ "$id" == "debian" ]] || [[ "$id_like" =~ debian ]] || [[ "$name" =~ [Dd]ebian ]]; then
+        logo="$DEFAULT_LOGO_DEBIAN"
+    elif [[ "$(uname -s)" == "Linux" ]]; then
+        logo="$DEFAULT_LOGO_LINUX"
     fi
 
     echo "$name|$logo"

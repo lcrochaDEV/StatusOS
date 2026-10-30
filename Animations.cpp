@@ -102,6 +102,13 @@ bool Animations::playAnimation(GifID animType) {
             // gifSize = sizeof(standby_gif);
             break;
 
+        /*case GifID::PS1:
+            stop(); // Sai de qualquer teste/animacao em andamento antes de iniciar o GIF
+            gifData = ps1_gif;
+            gifSize = sizeof(ps1_gif);
+            break;
+        */
+
         default:
             Serial.println("ERRO: Tipo de animacao nao mapeado!");
             return false;
