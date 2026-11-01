@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include "animes/ciclope.h"
 #include "animes/foradoar.h"
+#include "animes/olho.h"
 //#include "animes/PS1_Startup.h"
 
 static TFT_eSPI* pTftInstance = nullptr;
@@ -81,7 +82,34 @@ bool Animations::playAnimation(GifID animType) {
             }
             return true;
             break;
-
+        case GifID::OLHO:
+            if (_currentAnim == GifID::OLHO) {
+                // Se já estiver exibindo o olho, a segunda chamada desliga e volta ao dashboard
+                stop();
+                _isTestMode = false;
+            } else {
+                
+                // Primeira chamada: exibe a imagem de olho e trava o modo de teste
+                stop();
+                _currentAnim = GifID::OLHO;
+                _isTestMode = true; 
+                _bootStartMs = millis();
+                
+                _tft.startWrite();
+                // Processa linha por linha (320 pixels por vez) para corrigir as cores
+                for (int y = 0; y < 240; y++) {
+                    uint16_t linhaBuffer[320];
+                    for (int x = 0; x < 320; x++) {
+                        int index = y * 320 + x;
+                        linhaBuffer[x] = __builtin_bswap16(((uint16_t*)olho)[index]);
+                    }
+                    _tft.pushImage(0, y, 320, 1, linhaBuffer);
+                }
+                _tft.endWrite();
+                vTaskDelay(pdMS_TO_TICKS(2000));
+            }
+            return true;
+            break;
         case GifID::NOT_WIFI:
             // gifData = not_wifi_gif;
             // gifSize = sizeof(not_wifi_gif);

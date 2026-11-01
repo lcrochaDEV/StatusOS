@@ -1,6 +1,7 @@
 #include "WifiConnect.h"
 #include <Preferences.h>
 #include <WiFiManager.h>
+#include <WiFiUdp.h>
 
 #if defined(ESP32)
   #include <esp_wifi.h>
@@ -251,15 +252,24 @@ void WifiConnect::startAccessPoint(const char* apPassword, uint32_t timeoutSegun
 
 bool WifiConnect::checkStatus() {
     if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\n[Wi-Fi] Conectado à Rede: %s\n", WiFi.SSID().c_str()); 
+        Serial.printf("\n[Wi-Fi] Conectado à Rede: %s\n", WiFi.SSID().c_str());
         Serial.printf("[Wi-Fi] Endereço IP: %s\n", WiFi.localIP().toString().c_str());
-        Serial.printf("[Wi-Fi] Endereço MAC: %s\n", WiFi.macAddress().c_str()); 
-        Serial.printf("[Wi-Fi] Canal Wi-Fi: %d\n\n", WiFi.channel()); 
+        Serial.printf("[Wi-Fi] Endereço MAC: %s\n", WiFi.macAddress().c_str());
+        Serial.printf("[Wi-Fi] Canal Wi-Fi: %d\n\n", WiFi.channel());
         return true;
     } else {
         Serial.println("\n[Wi-Fi] Wi-Fi Desconectado!");
         return false;
     }
+}
+
+void WifiConnect::wakeOnLan(const char* macAddress) {
+    if (WiFi.status() != WL_CONNECTED) return;
+    WiFiUDP udp;
+    WakeOnLan wol(udp);
+    wol.setRepeat(3, 100);
+    wol.sendMagicPacket(macAddress);
+    Serial.printf("[WoL] Pacote enviado para: %s\n", macAddress);
 }
 
 WifiState WifiConnect::getState() const {

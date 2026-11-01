@@ -9,6 +9,7 @@
 #include "WifiConnect.h"
 #include "FileSystemControll.h"
 #include "ConsoleDependencies.h"
+#include "SDData.h"
 
 // ==========================================
 // PALETA DE CORES (DARK MODE NEON)
@@ -27,7 +28,6 @@ namespace UITheme {
 
     constexpr lv_color_t TEXT_WHITE    = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);
     constexpr lv_color_t TEXT_MUTED    = LV_COLOR_MAKE(0x8F, 0x94, 0xB8);
-    constexpr lv_color_t GREEN_ONLINE  = LV_COLOR_MAKE(0x00, 0xFF, 0x88);
 }
 
 // ==========================================
@@ -38,6 +38,7 @@ private:
     // Referências necessárias apenas para atualização dinâmica
     lv_obj_t *label_host = nullptr;
     lv_obj_t *label_wifi = nullptr;
+    lv_obj_t *label_sd = nullptr;
 
     // Popups e Diálogos Ativos
     lv_obj_t *msgbox_wifi = nullptr;
@@ -392,6 +393,23 @@ public:
                 }
                 lv_obj_add_event_cb(btn_wifi, wifi_event_cb, LV_EVENT_CLICKED, this);
             }
+
+            // SD Card (Aparece apenas quando NÃO detectado)
+            lv_obj_t* btn_sd = lv_button_create(topbar);
+            if (btn_sd) {
+                lv_obj_set_size(btn_sd, 26, 26);
+                lv_obj_align(btn_sd, LV_ALIGN_RIGHT_MID, -58, 0);
+                lv_obj_set_style_bg_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
+                lv_obj_set_style_shadow_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
+
+                label_sd = lv_label_create(btn_sd);
+                if (label_sd) {
+                    lv_label_set_text(label_sd, LV_SYMBOL_SD_CARD);
+                    lv_obj_set_style_text_color(label_sd, UITheme::TEXT_WHITE, LV_PART_MAIN);
+                    lv_obj_center(label_sd);
+                }
+                lv_obj_add_flag(btn_sd, LV_OBJ_FLAG_HIDDEN); // Escondido por padrão
+            }
         }
 
         // Construção dos 4 Cards via Array/Loop
@@ -477,8 +495,15 @@ public:
 
         if (label_wifi) {
             lv_label_set_text(label_wifi, online ? LV_SYMBOL_WIFI : LV_SYMBOL_CLOSE);
-            lv_obj_set_style_text_color(label_wifi, online ? UITheme::GREEN_ONLINE : UITheme::ARC_TEMP, LV_PART_MAIN);
+            lv_obj_set_style_text_color(label_wifi, online ? UITheme::TEXT_WHITE : UITheme::ARC_TEMP, LV_PART_MAIN);
         }
+    }
+
+    void check_sd_status() {
+        if (!label_sd) return;
+        lv_obj_t* parent = lv_obj_get_parent(label_sd);
+        if (sdData.isReady()) lv_obj_add_flag(parent, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_clear_flag(parent, LV_OBJ_FLAG_HIDDEN);
     }
 };
 
@@ -500,11 +525,12 @@ inline bool ui_popup_aviso_rede_aberto() { return g_dashboard.popup_aviso_rede_a
 
 
 
-inline void update_telemetry_data(const char* host, const char* os_name, const char* kernel, 
-                                  float temp, float cpu_load, int ram_pct, int disk_pct, 
+inline void update_telemetry_data(const char* host, const char* os_name, const char* kernel,
+                                  float temp, float cpu_load, int ram_pct, int disk_pct,
                                   const char* uptime, const void* logo_url, float cpu_cores = 4.0f) {
     (void)logo_url;
     g_dashboard.set_online_status(true);
+    g_dashboard.check_sd_status();
     g_dashboard.update_display(host, os_name, kernel, temp, cpu_load, ram_pct, disk_pct, uptime, cpu_cores);
 }
 

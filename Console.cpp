@@ -182,6 +182,7 @@ void Console::commands_envio(const String& command) {
     {"WAKE",        &Console::cmdWake},
     {"CLEAR",       &Console::cmdClear},
     {"CLS",         &Console::cmdClear},
+    {"OLHO",         &Console::cmdOlho},
   };
 
   for (const CommandEntry& entry : commands) {
@@ -306,6 +307,13 @@ void Console::cmdLogo(const String& param) {
   _anim->playAnimation(GifID::BOOT);
 }
 
+void Console::cmdOlho(const String& param) {
+  (void)param;
+  if (!animationReady()) return;
+
+  menssageViewMsg("[Console] Executando Olho...");
+  _anim->playAnimation(GifID::OLHO);
+}
 
 void Console::cmdAnimacao(const String& param) {
   (void)param;

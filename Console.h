@@ -66,6 +66,7 @@ class Console {
     void cmdStop(const String& param);
     void cmdForaDoAr(const String& param);
     void cmdPs1(const String& param);
+    void cmdOlho(const String& param);
 
 
     void cmdLogOn(const String& param);   //ATIVA OS LOGS CONTINUOS

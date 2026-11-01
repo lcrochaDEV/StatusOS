@@ -2,6 +2,7 @@
 #define WIFICONNECT_H
 
 #include <Arduino.h>
+#include <WakeOnLan.h>
 #include "SecurityConfig.h"
 
 #if defined(ESP8266)
@@ -35,14 +36,16 @@ class WifiConnect {
     // Métodos de Checagem e Status
     bool checkStatus();
     WifiState getState() const;
+    void wakeOnLan(const char* macAddress);
 
     // Getters Globais (Zero Heap / Seguros para a UI)
     static const char* obtainIP();
     static const char* obtainMascara();
+    // Retorna MAC formatado para exibição (ex: 00:11:22:33:44:55)
     static const char* obtainMacAddress();
 
   private:
-    const char* ssid; 
+    const char* ssid;
     const char* password;
 
     char ssidBuffer[33] = {0};
@@ -61,6 +64,7 @@ class WifiConnect {
     uint8_t falhasCredencial = 0;
     const uint8_t limiteFalhasCredencial = 3;
 
+    // Retorna MAC bruto para uso interno (ex: 001122334455)
     void extrairMacHardware(char* bufferOut, size_t bufferSize);
     bool possuiCredenciais() const;
     bool carregarCredenciais();

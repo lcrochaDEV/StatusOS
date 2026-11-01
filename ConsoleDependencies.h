@@ -11,7 +11,8 @@ enum class GifID {
     BUG_FRAME,  //SEM USO
     STANDBY,    //SEM USO
     FORA_DO_AR,
-    PS1 
+    PS1,
+    OLHO
 };
 
 // Interfaces mínimas consumidas pelo Console (inversão de dependência).

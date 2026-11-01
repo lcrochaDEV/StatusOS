@@ -609,6 +609,25 @@ static const char config_html[] PROGMEM = R"rawliteral(
               </button>
           </form>
         </section>
+
+        <!-- Card: Wake On LAN -->
+        <section class="card">
+          <div class="card-header">
+              <svg viewBox="0 0 24 24" style="fill: var(--accent-cyan);"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+              <h2 style="color: var(--accent-cyan);">Wake on LAN</h2>
+          </div>
+
+          <div class="form-group">
+              <div class="input-wrapper">
+                  <input type="text" id="wol-mac" placeholder="MAC: XX:XX:XX:XX:XX:XX" style="background:transparent; border:none; color:var(--accent-cyan); outline:none; flex:1;">
+                  <button type="button" class="btn-primary" onclick="adicionarWOL()" style="padding: 8px 16px; min-width: auto;">Add</button>
+              </div>
+          </div>
+
+          <div id="wol-list" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Hosts injetados via JS -->
+          </div>
+        </section>
       </div>
     </div>
   </div>
