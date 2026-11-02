@@ -72,7 +72,9 @@ class Console {
     void cmdLogOn(const String& param);   //ATIVA OS LOGS CONTINUOS
     void cmdLogOff(const String& param);  //DESATIVA OS LOGS CONTINUOS
     void cmdWake(const String& param);
-    
+    void cmdScreenWol(const String& param);
+    void cmdScreenMain(const String& param);
+
     virtual void cmdClear(const String& param);
     bool animationReady();
     

@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include "Display.h"
 #include "ui_dashboard.h"
+#include "ui_wol_dashboard.h"
+
 
 // Inclusão dos módulos de rede e servidor do projeto
 #include "WifiConnect.h"
@@ -12,6 +14,20 @@ Console console = Console("Mochi> ");
 
 const char* hours_wakeon = "06:30";  // Fim do período noturno (06:30).
 const char* hours_sleep = "22:03";   // Início do período noturno (22:03).
+
+
+lv_obj_t *screen_main;
+lv_obj_t *screen_wol;
+
+static void gesture_event_cb(lv_event_t * e) {
+    lv_indev_t * indev = lv_indev_active();
+    lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+    if(dir == LV_DIR_LEFT) {
+        lv_scr_load_anim(screen_wol, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+    } else if(dir == LV_DIR_RIGHT) {
+        lv_scr_load_anim(screen_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+    }
+}
 
 // Passa a referência da animação para o relógio
 Hours_Time hours_Time_exec = Hours_Time(hours_sleep, hours_wakeon, "", -3 * 3600, 0, "pool.ntp.org");
@@ -77,11 +93,14 @@ void atualizarStatusRede() {
         ui_fechar_popup_aviso_rede();
         hours_Time_exec.time_server();
         update_status(true);
+        update_wol_status(true); // Atualiza tela WoL
         online = true;
     } else if (!conectado && online) {
         update_status(false);
+        update_wol_status(false); // Atualiza tela WoL
         online = false;
     }
+    check_wol_sd_status(); // Verifica SD em tempo real
 }
 
 void setup() {
@@ -133,20 +152,35 @@ void setup() {
         Serial.println("[StatusOS] Sem conexão. Exibindo Dashboard, Pop-up de Aviso e Animação Offline...");
         
         // Constrói o dashboard base, abre o pop-up de aviso de rede e define o status offline na topbar
-        create_dashboard_ui();          
-        ui_abrir_popup_aviso_rede();    
-        update_status(false);           
-        
+        screen_main = lv_screen_active();
+        create_dashboard_ui();
+        ui_abrir_popup_aviso_rede();
+        update_status(false);
+
+        screen_wol = lv_obj_create(NULL);
+        create_wol_screen(screen_wol);
+
+        lv_obj_add_event_cb(screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+
         // Dispara a animação offline de forma assíncrona
         //anim.playAnimation(GifID::NOT_WIFI);
     } else {
         Serial.println("[StatusOS] Conectado! Sincronizando NTP e iniciando serviços...");
-        
-        hours_Time_exec.time_server();                                
 
-        create_dashboard_ui(); 
+        hours_Time_exec.time_server();
+
+        screen_main = lv_screen_active();
+        create_dashboard_ui();
+
+        screen_wol = lv_obj_create(NULL);
+        create_wol_screen(screen_wol);
+
+        lv_obj_add_event_cb(screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+
         update_status(true);
-    } 
+    }
 
     console.helloWord();        
 }
