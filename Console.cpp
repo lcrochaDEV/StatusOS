@@ -1,4 +1,5 @@
 #include "Console.h"
+#include "ui_screens.h"
 #include <lvgl.h>
 
 
@@ -184,6 +185,7 @@ void Console::commands_envio(const String& command) {
     {"WAKE",        &Console::cmdWake},
     {"SCREENWOL",   &Console::cmdScreenWol},
     {"SCREENMAIN",  &Console::cmdScreenMain},
+    {"SCREENCRYPTO",&Console::cmdScreenCrypto},
     {"CLEAR",       &Console::cmdClear},
     {"CLS",         &Console::cmdClear},
     {"OLHO",         &Console::cmdOlho},
@@ -227,8 +229,9 @@ void Console::cmdHelp(const String& param) {
     "WAKE               - Liga o display manualmente no período noturno (timeout de 5 min)\n"
     "CLEAR              - Limpa as linhas e o conteúdo visível do terminal\n"
     "CLS                - Limpa as linhas e o conteúdo visível do terminal\n"
-    "SCREENWOL          - Tela de Wake on Lan list"
-    "SCREENMAIN         - Tela do DashBoard"
+    "SCREENWOL          - Tela de Wake on Lan list\n"
+    "SCREENMAIN         - Tela do DashBoard\n"
+    "SCREENCRYPTO       - Tela do Crypto Dashboard"
   );
 }
 
@@ -436,19 +439,21 @@ void Console::cmdClear(const String& param) {
     Serial.print("\033[2J\033[H");
     menssageViewMsg("[Console] Terminal limpo com sucesso.");
 }
-
-extern lv_obj_t *screen_main;
-extern lv_obj_t *screen_wol;
-
 void Console::cmdScreenWol(const String& param) {
     (void)param;
-    lv_scr_load_anim(screen_wol, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+    lv_scr_load_anim(g_screen_wol, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
     menssageViewMsg("[Console] Alternando para tela WOL.");
 }
 
 void Console::cmdScreenMain(const String& param) {
     (void)param;
-    lv_scr_load_anim(screen_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+    lv_scr_load_anim(g_screen_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
     menssageViewMsg("[Console] Alternando para tela Principal.");
+}
+
+void Console::cmdScreenCrypto(const String& param) {
+    (void)param;
+    lv_scr_load_anim(g_screen_crypto, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+    menssageViewMsg("[Console] Alternando para tela Crypto.");
 }
 

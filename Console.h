@@ -74,6 +74,7 @@ class Console {
     void cmdWake(const String& param);
     void cmdScreenWol(const String& param);
     void cmdScreenMain(const String& param);
+    void cmdScreenCrypto(const String& param);
 
     virtual void cmdClear(const String& param);
     bool animationReady();

@@ -2,6 +2,7 @@
 #define UI_WOL_DASHBOARD_H
 
 #include "WifiConnect.h"
+#include "SDData.h"
 
 // Cores base do tema Neon
 #define WOL_COLOR_BG       lv_color_hex(0x0A0B10)

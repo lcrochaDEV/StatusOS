@@ -9,26 +9,8 @@
 #include "WifiConnect.h"
 #include "FileSystemControll.h"
 #include "ConsoleDependencies.h"
+#include "UITheme.h"
 #include "SDData.h"
-
-// ==========================================
-// PALETA DE CORES (DARK MODE NEON)
-// ==========================================
-namespace UITheme {
-    constexpr lv_color_t BG_MAIN       = LV_COLOR_MAKE(0x0A, 0x0B, 0x10);
-    constexpr lv_color_t TOPBAR        = LV_COLOR_MAKE(0x12, 0x13, 0x1C);
-    constexpr lv_color_t CARD_BG       = LV_COLOR_MAKE(0x2A, 0x2C, 0x3D);
-    constexpr lv_color_t BORDER_IDLE   = LV_COLOR_MAKE(0x22, 0x24, 0x36);
-    constexpr lv_color_t BORDER_ACTIVE = LV_COLOR_MAKE(0x3D, 0x42, 0x6B);
-
-    constexpr lv_color_t ARC_CPU       = LV_COLOR_MAKE(0x00, 0xF2, 0xFE);
-    constexpr lv_color_t ARC_RAM       = LV_COLOR_MAKE(0xFF, 0x00, 0x7F);
-    constexpr lv_color_t ARC_DISK      = LV_COLOR_MAKE(0xBD, 0x00, 0xFF);
-    constexpr lv_color_t ARC_TEMP      = LV_COLOR_MAKE(0xFF, 0x00, 0x55);
-
-    constexpr lv_color_t TEXT_WHITE    = LV_COLOR_MAKE(0xFF, 0xFF, 0xFF);
-    constexpr lv_color_t TEXT_MUTED    = LV_COLOR_MAKE(0x8F, 0x94, 0xB8);
-}
 
 // ==========================================
 // CLASSE PRINCIPAL DASHBOARD UI
@@ -335,16 +317,10 @@ public:
         // --- TOPBAR ---
         lv_obj_t *topbar = lv_obj_create(scr);
         if (topbar) {
+            UITheme::apply_header_style(topbar);
             lv_obj_set_size(topbar, 320, 32);
             lv_obj_set_pos(topbar, 0, 0);
-            lv_obj_set_style_bg_color(topbar, UITheme::TOPBAR, LV_PART_MAIN);
-            lv_obj_set_style_bg_opa(topbar, LV_OPA_COVER, LV_PART_MAIN);
-            lv_obj_set_style_border_color(topbar, UITheme::BORDER_IDLE, LV_PART_MAIN);
             lv_obj_set_style_border_side(topbar, LV_BORDER_SIDE_BOTTOM, LV_PART_MAIN);
-            lv_obj_set_style_border_width(topbar, 1, LV_PART_MAIN);
-            lv_obj_set_style_radius(topbar, 0, LV_PART_MAIN);
-            lv_obj_set_style_pad_all(topbar, 2, LV_PART_MAIN);
-            lv_obj_remove_flag(topbar, LV_OBJ_FLAG_SCROLLABLE);
 
             lv_obj_t *lbl_title = lv_label_create(topbar);
             if (lbl_title) {
@@ -415,10 +391,10 @@ public:
         // Construção dos 4 Cards via Array/Loop
         struct CardConfig { const char* title; lv_color_t bg; lv_color_t arc; };
         CardConfig configs[4] = {
-            {"CPU",   LV_COLOR_MAKE(0x13, 0x17, 0x2E), UITheme::ARC_CPU},
-            {"RAM",   LV_COLOR_MAKE(0x12, 0x24, 0x28), UITheme::ARC_RAM},
-            {"Disco", LV_COLOR_MAKE(0x23, 0x14, 0x2B), UITheme::ARC_DISK},
-            {"Temp",  LV_COLOR_MAKE(0x2B, 0x12, 0x1C), UITheme::ARC_TEMP}
+            {"CPU",   UITheme::CARD_CPU_BG, UITheme::ARC_CPU},
+            {"RAM",   UITheme::CARD_RAM_BG, UITheme::ARC_RAM},
+            {"Disco", UITheme::CARD_DISK_BG, UITheme::ARC_DISK},
+            {"Temp",  UITheme::CARD_TEMP_BG, UITheme::ARC_TEMP}
         };
 
         for (int i = 0; i < 4; i++) {

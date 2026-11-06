@@ -2,7 +2,8 @@
 #include "Display.h"
 #include "ui_dashboard.h"
 #include "ui_wol_dashboard.h"
-
+#include "ui_crypto_dashboard.h"
+#include "ui_screens.h"
 
 // Inclusão dos módulos de rede e servidor do projeto
 #include "WifiConnect.h"
@@ -16,16 +17,18 @@ const char* hours_wakeon = "06:30";  // Fim do período noturno (06:30).
 const char* hours_sleep = "22:03";   // Início do período noturno (22:03).
 
 
-lv_obj_t *screen_main;
-lv_obj_t *screen_wol;
-
 static void gesture_event_cb(lv_event_t * e) {
     lv_indev_t * indev = lv_indev_active();
     lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+    lv_obj_t * act = lv_scr_act();
     if(dir == LV_DIR_LEFT) {
-        lv_scr_load_anim(screen_wol, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+        if (act == g_screen_main) lv_scr_load_anim(g_screen_wol, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+        else if (act == g_screen_wol) lv_scr_load_anim(g_screen_crypto, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
+        else lv_scr_load_anim(g_screen_main, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
     } else if(dir == LV_DIR_RIGHT) {
-        lv_scr_load_anim(screen_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+        if (act == g_screen_main) lv_scr_load_anim(g_screen_crypto, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+        else if (act == g_screen_crypto) lv_scr_load_anim(g_screen_wol, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
+        else lv_scr_load_anim(g_screen_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 300, 0, false);
     }
 }
 
@@ -150,18 +153,22 @@ void setup() {
 
     if (!wifiConnect.checkStatus()) {
         Serial.println("[StatusOS] Sem conexão. Exibindo Dashboard, Pop-up de Aviso e Animação Offline...");
-        
+
         // Constrói o dashboard base, abre o pop-up de aviso de rede e define o status offline na topbar
-        screen_main = lv_screen_active();
+        g_screen_main = lv_screen_active();
         create_dashboard_ui();
         ui_abrir_popup_aviso_rede();
         update_status(false);
 
-        screen_wol = lv_obj_create(NULL);
-        create_wol_screen(screen_wol);
+        g_screen_wol = lv_obj_create(NULL);
+        create_wol_screen(g_screen_wol);
 
-        lv_obj_add_event_cb(screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
-        lv_obj_add_event_cb(screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        g_screen_crypto = lv_obj_create(NULL);
+        create_crypto_screen(g_screen_crypto);
+
+        lv_obj_add_event_cb(g_screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(g_screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(g_screen_crypto, gesture_event_cb, LV_EVENT_GESTURE, NULL);
 
         // Dispara a animação offline de forma assíncrona
         //anim.playAnimation(GifID::NOT_WIFI);
@@ -170,14 +177,18 @@ void setup() {
 
         hours_Time_exec.time_server();
 
-        screen_main = lv_screen_active();
+        g_screen_main = lv_screen_active();
         create_dashboard_ui();
 
-        screen_wol = lv_obj_create(NULL);
-        create_wol_screen(screen_wol);
+        g_screen_wol = lv_obj_create(NULL);
+        create_wol_screen(g_screen_wol);
 
-        lv_obj_add_event_cb(screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
-        lv_obj_add_event_cb(screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        g_screen_crypto = lv_obj_create(NULL);
+        create_crypto_screen(g_screen_crypto);
+
+        lv_obj_add_event_cb(g_screen_main, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(g_screen_wol, gesture_event_cb, LV_EVENT_GESTURE, NULL);
+        lv_obj_add_event_cb(g_screen_crypto, gesture_event_cb, LV_EVENT_GESTURE, NULL);
 
         update_status(true);
     }
@@ -194,8 +205,12 @@ void loop() {
 
     // Processa as requisições do Servidor Web e WebSocket
     if (atualizarServidorWeb()) process_web_server_tasks();
+
+    // Atualiza a tela de Cripto
+    crypto_loop();
+
     // Cede tempo para o sistema operacional / Watchdog do ESP32
-    vTaskDelay(pdMS_TO_TICKS(5)); 
+    vTaskDelay(pdMS_TO_TICKS(5));
 
     hours_Time_exec.weke_on();
     console.consoleView();
