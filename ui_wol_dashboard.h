@@ -3,6 +3,7 @@
 
 #include "WifiConnect.h"
 #include "SDData.h"
+#include "ui_header.h"
 
 // Cores base do tema Neon
 #define WOL_COLOR_BG       lv_color_hex(0x0A0B10)
@@ -100,77 +101,13 @@ inline lv_obj_t* create_wol_card(lv_obj_t *parent, const char* name, const char*
 // Classe para gerenciar os estados da tela WOL
 class WolDashboardUI {
 private:
-    lv_obj_t *lbl_wifi = nullptr;
-    lv_obj_t *btn_sd = nullptr;
+    UIHeader *header = nullptr;
 
 public:
     void init(lv_obj_t *screen_scr) {
         // --- TOPBAR PADRONIZADA ---
-        lv_obj_t *topbar = lv_obj_create(screen_scr);
-        lv_obj_set_size(topbar, 320, 32);
-        lv_obj_set_pos(topbar, 0, 0);
-        lv_obj_set_style_bg_color(topbar, lv_color_hex(0x12131C), LV_PART_MAIN);
-        lv_obj_set_style_bg_opa(topbar, LV_OPA_COVER, LV_PART_MAIN);
-        lv_obj_set_style_border_color(topbar, lv_color_hex(0x222436), LV_PART_MAIN);
-        lv_obj_set_style_border_side(topbar, LV_BORDER_SIDE_BOTTOM, LV_PART_MAIN);
-        lv_obj_set_style_border_width(topbar, 1, LV_PART_MAIN);
-        lv_obj_set_style_radius(topbar, 0, LV_PART_MAIN);
-        lv_obj_set_style_pad_all(topbar, 2, LV_PART_MAIN);
-        lv_obj_remove_flag(topbar, LV_OBJ_FLAG_SCROLLABLE);
+        header = new UIHeader(screen_scr, "WakeONLan", "", nullptr, nullptr, this);
 
-        lv_obj_t *lbl_title = lv_label_create(topbar);
-        lv_label_set_text(lbl_title, "WakeONLan");
-        lv_obj_set_style_text_color(lbl_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-        lv_obj_align(lbl_title, LV_ALIGN_LEFT_MID, 6, 0);
-
-        // Engrenagem
-        lv_obj_t* btn_settings = lv_button_create(topbar);
-        if (btn_settings) {
-            lv_obj_set_size(btn_settings, 26, 26);
-            lv_obj_align(btn_settings, LV_ALIGN_RIGHT_MID, -2, 0);
-            lv_obj_set_style_bg_opa(btn_settings, LV_OPA_TRANSP, LV_PART_MAIN);
-            lv_obj_set_style_shadow_opa(btn_settings, LV_OPA_TRANSP, LV_PART_MAIN);
-
-            lv_obj_t* lbl = lv_label_create(btn_settings);
-            if (lbl) {
-                lv_label_set_text(lbl, LV_SYMBOL_SETTINGS);
-                lv_obj_set_style_text_color(lbl, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                lv_obj_center(lbl);
-            }
-        }
-
-        // Wi-Fi
-        lv_obj_t* btn_wifi = lv_button_create(topbar);
-        if (btn_wifi) {
-            lv_obj_set_size(btn_wifi, 26, 26);
-            lv_obj_align(btn_wifi, LV_ALIGN_RIGHT_MID, -30, 0);
-            lv_obj_set_style_bg_opa(btn_wifi, LV_OPA_TRANSP, LV_PART_MAIN);
-            lv_obj_set_style_shadow_opa(btn_wifi, LV_OPA_TRANSP, LV_PART_MAIN);
-
-            lbl_wifi = lv_label_create(btn_wifi);
-            if (lbl_wifi) {
-                lv_label_set_text(lbl_wifi, LV_SYMBOL_WIFI);
-                lv_obj_set_style_text_color(lbl_wifi, lv_color_hex(0x8F94B8), LV_PART_MAIN);
-                lv_obj_center(lbl_wifi);
-            }
-        }
-
-        // SD Card
-        btn_sd = lv_button_create(topbar);
-        if (btn_sd) {
-            lv_obj_set_size(btn_sd, 26, 26);
-            lv_obj_align(btn_sd, LV_ALIGN_RIGHT_MID, -58, 0);
-            lv_obj_set_style_bg_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
-            lv_obj_set_style_shadow_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
-
-            lv_obj_t* lbl_sd = lv_label_create(btn_sd);
-            if (lbl_sd) {
-                lv_label_set_text(lbl_sd, LV_SYMBOL_SD_CARD);
-                lv_obj_set_style_text_color(lbl_sd, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-                lv_obj_center(lbl_sd);
-            }
-            lv_obj_add_flag(btn_sd, LV_OBJ_FLAG_HIDDEN); // Escondido por padrão
-        }
 
         // Container Principal em Grid
         lv_obj_t *grid_container = lv_obj_create(screen_scr);
@@ -202,16 +139,11 @@ public:
     }
 
     void set_online_status(bool online) {
-        if (lbl_wifi) {
-            lv_label_set_text(lbl_wifi, online ? LV_SYMBOL_WIFI : LV_SYMBOL_CLOSE);
-            lv_obj_set_style_text_color(lbl_wifi, online ? lv_color_hex(0xFFFFFF) : lv_color_hex(0xFF0055), LV_PART_MAIN);
-        }
+        if (header) header->updateWifi(online);
     }
 
     void check_sd_status() {
-        if (!btn_sd) return;
-        if (sdData.isReady()) lv_obj_add_flag(btn_sd, LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_clear_flag(btn_sd, LV_OBJ_FLAG_HIDDEN);
+        if (header) header->updateSD(sdData.isReady());
     }
 };
 

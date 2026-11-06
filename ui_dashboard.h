@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include "ui_header.h"
 #include "WifiConnect.h"
 #include "FileSystemControll.h"
 #include "ConsoleDependencies.h"
@@ -17,11 +18,7 @@
 // ==========================================
 class DashboardUI {
 private:
-    // Referências necessárias apenas para atualização dinâmica
-    lv_obj_t *label_host = nullptr;
-    lv_obj_t *label_wifi = nullptr;
-    lv_obj_t *label_sd = nullptr;
-
+    UIHeader* header = nullptr;
     // Popups e Diálogos Ativos
     lv_obj_t *msgbox_wifi = nullptr;
     lv_obj_t *msgbox_brilho = nullptr;
@@ -315,78 +312,7 @@ public:
         lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
         // --- TOPBAR ---
-        lv_obj_t *topbar = lv_obj_create(scr);
-        if (topbar) {
-            UITheme::apply_header_style(topbar);
-            lv_obj_set_size(topbar, 320, 32);
-            lv_obj_set_pos(topbar, 0, 0);
-            lv_obj_set_style_border_side(topbar, LV_BORDER_SIDE_BOTTOM, LV_PART_MAIN);
-
-            lv_obj_t *lbl_title = lv_label_create(topbar);
-            if (lbl_title) {
-                lv_label_set_text(lbl_title, "DashBoard");
-                lv_obj_set_style_text_color(lbl_title, UITheme::TEXT_WHITE, LV_PART_MAIN);
-                lv_obj_align(lbl_title, LV_ALIGN_LEFT_MID, 6, 0);
-            }
-
-            label_host = lv_label_create(topbar);
-            if (label_host) {
-                lv_label_set_text(label_host, "Aguardando...");
-                lv_obj_set_style_text_color(label_host, UITheme::TEXT_MUTED, LV_PART_MAIN);
-                lv_obj_align(label_host, LV_ALIGN_CENTER, 0, 0);
-            }
-
-            // Engrenagem
-            lv_obj_t* btn_settings = lv_button_create(topbar);
-            if (btn_settings) {
-                lv_obj_set_size(btn_settings, 26, 26);
-                lv_obj_align(btn_settings, LV_ALIGN_RIGHT_MID, -2, 0);
-                lv_obj_set_style_bg_opa(btn_settings, LV_OPA_TRANSP, LV_PART_MAIN);
-                lv_obj_set_style_shadow_opa(btn_settings, LV_OPA_TRANSP, LV_PART_MAIN);
-
-                lv_obj_t* lbl = lv_label_create(btn_settings);
-                if (lbl) {
-                    lv_label_set_text(lbl, LV_SYMBOL_SETTINGS);
-                    lv_obj_set_style_text_color(lbl, UITheme::TEXT_WHITE, LV_PART_MAIN);
-                    lv_obj_center(lbl);
-                }
-                lv_obj_add_event_cb(btn_settings, settings_event_cb, LV_EVENT_CLICKED, this);
-            }
-
-            // Wi-Fi
-            lv_obj_t* btn_wifi = lv_button_create(topbar);
-            if (btn_wifi) {
-                lv_obj_set_size(btn_wifi, 26, 26);
-                lv_obj_align(btn_wifi, LV_ALIGN_RIGHT_MID, -30, 0);
-                lv_obj_set_style_bg_opa(btn_wifi, LV_OPA_TRANSP, LV_PART_MAIN);
-                lv_obj_set_style_shadow_opa(btn_wifi, LV_OPA_TRANSP, LV_PART_MAIN);
-
-                label_wifi = lv_label_create(btn_wifi);
-                if (label_wifi) {
-                    lv_label_set_text(label_wifi, LV_SYMBOL_WIFI);
-                    lv_obj_set_style_text_color(label_wifi, UITheme::TEXT_MUTED, LV_PART_MAIN);
-                    lv_obj_center(label_wifi);
-                }
-                lv_obj_add_event_cb(btn_wifi, wifi_event_cb, LV_EVENT_CLICKED, this);
-            }
-
-            // SD Card (Aparece apenas quando NÃO detectado)
-            lv_obj_t* btn_sd = lv_button_create(topbar);
-            if (btn_sd) {
-                lv_obj_set_size(btn_sd, 26, 26);
-                lv_obj_align(btn_sd, LV_ALIGN_RIGHT_MID, -58, 0);
-                lv_obj_set_style_bg_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
-                lv_obj_set_style_shadow_opa(btn_sd, LV_OPA_TRANSP, LV_PART_MAIN);
-
-                label_sd = lv_label_create(btn_sd);
-                if (label_sd) {
-                    lv_label_set_text(label_sd, LV_SYMBOL_SD_CARD);
-                    lv_obj_set_style_text_color(label_sd, UITheme::TEXT_WHITE, LV_PART_MAIN);
-                    lv_obj_center(label_sd);
-                }
-                lv_obj_add_flag(btn_sd, LV_OBJ_FLAG_HIDDEN); // Escondido por padrão
-            }
-        }
+        header = new UIHeader(scr, "DashBoard", "Aguardando...", wifi_event_cb, settings_event_cb, this);
 
         // Construção dos 4 Cards via Array/Loop
         struct CardConfig { const char* title; lv_color_t bg; lv_color_t arc; };
@@ -432,13 +358,13 @@ public:
         set_online_status(strcmp(WifiConnect::obtainIP(), "0.0.0.0") != 0);
     }
 
-    void update_display(const char* host, const char* os_name, const char* kernel, 
-                        float temp, float cpu_load, int ram_pct, int disk_pct, 
+    void update_display(const char* host, const char* os_name, const char* kernel,
+                        float temp, float cpu_load, int ram_pct, int disk_pct,
                         const char* uptime, float cpu_cores = 4.0f) {
-        if (label_host && host) lv_label_set_text(label_host, host);
+        if (header && host) header->setText(host);
         if (lbl_os_name) lv_label_set_text_fmt(lbl_os_name, "SO: %s", os_name ? os_name : "N/A");
-        if (lbl_os_kernel) lv_label_set_text_fmt(lbl_os_kernel, "Kernel: %s | Up: %s", 
-                                                    kernel ? kernel : "N/A", 
+        if (lbl_os_kernel) lv_label_set_text_fmt(lbl_os_kernel, "Kernel: %s | Up: %s",
+                                                    kernel ? kernel : "N/A",
                                                     uptime ? uptime : "--");
 
         int pcts[3] = {
@@ -469,17 +395,11 @@ public:
             }
         }
 
-        if (label_wifi) {
-            lv_label_set_text(label_wifi, online ? LV_SYMBOL_WIFI : LV_SYMBOL_CLOSE);
-            lv_obj_set_style_text_color(label_wifi, online ? UITheme::TEXT_WHITE : UITheme::ARC_TEMP, LV_PART_MAIN);
-        }
+        if (header) header->updateWifi(online);
     }
 
     void check_sd_status() {
-        if (!label_sd) return;
-        lv_obj_t* parent = lv_obj_get_parent(label_sd);
-        if (sdData.isReady()) lv_obj_add_flag(parent, LV_OBJ_FLAG_HIDDEN);
-        else lv_obj_clear_flag(parent, LV_OBJ_FLAG_HIDDEN);
+        if (header) header->updateSD(sdData.isReady());
     }
 };
 

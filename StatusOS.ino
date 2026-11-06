@@ -104,6 +104,7 @@ void atualizarStatusRede() {
         online = false;
     }
     check_wol_sd_status(); // Verifica SD em tempo real
+    check_crypto_sd_status();
 }
 
 void setup() {

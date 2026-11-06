@@ -22,6 +22,8 @@
 #include <time.h>
 #include <lvgl.h>
 #include "UITheme.h"
+#include "ui_header.h"
+#include "SDData.h"
 
 // ===================== Configuração (pode ser sobrescrita no .ino antes do #include) =====================
 #ifndef LCD_W
@@ -143,9 +145,7 @@ struct CoinUI {
 
 class CryptoDashboardUI {
 private:
-  lv_obj_t *lbl_clock = nullptr;
-  lv_obj_t *ico_batt  = nullptr;
-  lv_obj_t *ico_wifi  = nullptr;
+  UIHeader* header = nullptr;
   lv_obj_t *lbl_page  = nullptr;
   lv_obj_t *foot      = nullptr;
   lv_obj_t *btn_lock  = nullptr;
@@ -229,16 +229,16 @@ private:
     if (now > 1700000000) {                    // só depois do NTP sincronizar
       struct tm tmv;
       localtime_r(&now, &tmv);
-      snprintf(buf, sizeof(buf), "%02d/%02d %02d:%02d:%02d",
-               tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_hour, tmv.tm_min, tmv.tm_sec);
-      lv_label_set_text(lbl_clock, buf);
+      snprintf(buf, sizeof(buf), "%02d/%02d %02d:%02d",
+               tmv.tm_mday, tmv.tm_mon + 1, tmv.tm_hour, tmv.tm_min);
+      if (header) header->setClock(buf);
     } else {
-      lv_label_set_text(lbl_clock, "--/-- --:--:--");
+      if (header) header->setClock("--/-- --:--");
     }
     // Wi-Fi: branco = Binance ao vivo, amarelo = fallback CoinGecko, vermelho = sem Wi-Fi
     bool wifi = WiFi.status() == WL_CONNECTED;
     lv_color_t col = !wifi ? CryptoTheme::DOWN : (binance_down ? CryptoTheme::WARN : UITheme::TEXT_WHITE);
-    lv_obj_set_style_text_color(ico_wifi, col, 0);
+    if (header) header->setWifiColor(col);
   }
 
   static void clock_cb(lv_timer_t* t) {
@@ -577,24 +577,7 @@ private:
   }
 
   void build_header(lv_obj_t* scr) {
-    lv_obj_t* bar = lv_obj_create(scr);
-    UITheme::apply_header_style(bar);
-    lv_obj_set_size(bar, LCD_W, CD_HEADER_H);
-    lv_obj_set_pos(bar, 0, 0);
-    lv_obj_set_style_border_side(bar, LV_BORDER_SIDE_BOTTOM, LV_PART_MAIN);
-
-    lv_obj_t* title = make_label(bar, "Crypto Dashboard", CD_FONT_LG, UITheme::TEXT_WHITE);
-    lv_obj_align(title, LV_ALIGN_LEFT_MID, 10, 0);
-
-    lbl_clock = make_label(bar, "--/-- --:--:--", CD_FONT_SM, UITheme::TEXT_MUTED);
-    lv_obj_align(lbl_clock, LV_ALIGN_RIGHT_MID, -56, 0);
-
-    ico_batt = make_label(bar, LV_SYMBOL_BATTERY_FULL, CD_FONT_LG, UITheme::TEXT_WHITE);
-    lv_obj_align(ico_batt, LV_ALIGN_RIGHT_MID, -32, 0);
-    lv_obj_add_flag(ico_batt, LV_OBJ_FLAG_HIDDEN);       // só aparece após set_battery()
-
-    ico_wifi = make_label(bar, LV_SYMBOL_WIFI, CD_FONT_LG, UITheme::TEXT_WHITE);
-    lv_obj_align(ico_wifi, LV_ALIGN_RIGHT_MID, -10, 0);
+      header = new UIHeader(scr, "Crypto Dashboard", "", nullptr, nullptr, this, false, true);
   }
 
   // rodapé com botões: timeframes à esquerda, página anterior/próxima à direita
@@ -720,6 +703,7 @@ public:
     build_header(scr);
     build_toolbar(scr);
     build_list(scr);
+    check_sd_status(); // Inicializa status do SD
     lv_obj_move_foreground(foot);                          // rodapé fixo, sempre por cima da lista
 
     // relógio via NTP
@@ -769,18 +753,11 @@ public:
     }
   }
 
-  // Bateria (0-100). Valor negativo esconde o ícone.
-  void set_battery(int percent) {
-    if (!ico_batt) return;
-    if (percent < 0) { lv_obj_add_flag(ico_batt, LV_OBJ_FLAG_HIDDEN); return; }
-    const char* sym = percent >= 88 ? LV_SYMBOL_BATTERY_FULL
-                    : percent >= 63 ? LV_SYMBOL_BATTERY_3
-                    : percent >= 38 ? LV_SYMBOL_BATTERY_2
-                    : percent >= 13 ? LV_SYMBOL_BATTERY_1
-                                    : LV_SYMBOL_BATTERY_EMPTY;
-    lv_label_set_text(ico_batt, sym);
-    lv_obj_set_style_text_color(ico_batt, percent <= 15 ? CryptoTheme::DOWN : UITheme::TEXT_WHITE, 0);
-    lv_obj_remove_flag(ico_batt, LV_OBJ_FLAG_HIDDEN);
+  // Bateria removida.
+  void set_battery(int percent) { }
+
+  void check_sd_status() {
+      if (header) header->updateSD(sdData.isReady());
   }
 };
 
@@ -789,4 +766,5 @@ inline CryptoDashboardUI g_crypto_dashboard;
 inline CryptoDashboardUI& CryptoDashboardUI::instance() { return g_crypto_dashboard; }
 inline void create_crypto_screen(lv_obj_t *scr) { g_crypto_dashboard.init(scr); }
 inline void crypto_loop() { g_crypto_dashboard.loop(); }
+inline void check_crypto_sd_status() { g_crypto_dashboard.check_sd_status(); }
 inline void crypto_set_battery(int percent) { g_crypto_dashboard.set_battery(percent); }
