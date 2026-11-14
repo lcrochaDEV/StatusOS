@@ -127,7 +127,7 @@ public:
             DeserializationError error = deserializeJson(doc, file);
             file.close();
 
-            if (!error && doc.containsKey("devices")) {
+            if (!error && doc["devices"].is<JsonArray>()) {
                 JsonArray devices = doc["devices"];
                 for (JsonObject device : devices) {
                     const char* name = device["name"] | "Sem Nome";

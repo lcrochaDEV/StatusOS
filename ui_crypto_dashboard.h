@@ -24,6 +24,7 @@
 #include "UITheme.h"
 #include "ui_header.h"
 #include "SDData.h"
+#include "WSManenger.h"
 
 // ===================== Configuração (pode ser sobrescrita no .ino antes do #include) =====================
 #ifndef LCD_W
@@ -155,11 +156,9 @@ private:
   lv_timer_t *auto_timer = nullptr;
   CoinUI ui[NUM_COINS];
 
-  WebSocketsClient ws;
   JsonDocument filterDoc;
   String wsPath;
   String geckoUrl;
-  bool ws_started = false;
   bool binance_down = false;
   uint32_t last_poll = 0;
   int cur_tf = CRYPTO_DEFAULT_TF;    // timeframe selecionado
@@ -329,7 +328,7 @@ private:
     pending_tf = -1;
     Serial.printf("[crypto] timeframe -> %s\n", TF_NAMES[cur_tf]);
     lv_timer_handler();                         // mostra o botão selecionado antes de bloquear na rede
-    if (ws_started) { ws.disconnect(); ws_started = false; }
+    if (wsManager.isClientStarted()) wsManager.disconnectClient();
     binance_down = false;
     for (int i = 0; i < NUM_COINS; i++) {
       ui[i].n = 0;
@@ -531,8 +530,8 @@ private:
     if (type == WStype_CONNECTED) {
       Serial.println("[crypto] WebSocket conectado");
     } else if (type == WStype_DISCONNECTED || type == WStype_ERROR) {
-      if (!self.binance_down && self.ws_started) Serial.println("[crypto] WebSocket indisponivel, usando CoinGecko");
-      if (self.ws_started) self.binance_down = true;
+      if (!self.binance_down && wsManager.isClientStarted()) Serial.println("[crypto] WebSocket indisponivel, usando CoinGecko");
+      if (wsManager.isClientStarted()) self.binance_down = true;
     } else if (type == WStype_TEXT) {
       self.binance_down = false;
       self.handle_msg(payload, length);
@@ -540,11 +539,8 @@ private:
   }
 
   void start_ws() {
-    ws.beginSSL("stream.binance.com", 9443, wsPath.c_str());
-    ws.onEvent(ws_event);
-    ws.setReconnectInterval(5000);
-    ws.enableHeartbeat(15000, 3000, 2);
-    ws_started = true;
+    wsManager.beginClientSSL("stream.binance.com", 9443, wsPath.c_str());
+    wsManager.onClientEvent(ws_event);
   }
 
   // ---------- Construção da UI ----------
@@ -741,13 +737,13 @@ public:
   void loop() {
     if (pending_tf >= 0) apply_timeframe();
 
-    if (!ws_started && WiFi.status() == WL_CONNECTED) {
+    if (!wsManager.isClientStarted() && WiFi.status() == WL_CONNECTED) {
       bootstrap_klines();
       start_ws();
     }
-    if (ws_started) ws.loop();
+    wsManager.clientLoop();
 
-    if (ws_started && binance_down && (millis() - last_poll > CRYPTO_POLL_MS)) {
+    if (wsManager.isClientStarted() && binance_down && (millis() - last_poll > CRYPTO_POLL_MS)) {
       poll_coingecko();
       last_poll = millis();
     }

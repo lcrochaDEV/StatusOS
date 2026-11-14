@@ -7,6 +7,7 @@
 
 // Inclusão dos módulos de rede e servidor do projeto
 #include "WifiConnect.h"
+#include "WSManenger.h"
 #include "servidorweb.h"
 #include "Hours_Time.h"
 
@@ -79,7 +80,7 @@ bool atualizarServidorWeb() {
         ultimaTentativaBindMs = millis();
         server.begin();
     } else if (!conectado && servidorAtivo) {
-        ws.closeAll();
+        wsManager.closeAllServerClients();
         server.end();             // Libera a porta 80 para o Portal AP
         servidorAtivo = false;
     }

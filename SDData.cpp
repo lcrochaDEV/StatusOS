@@ -70,13 +70,18 @@ bool SDData::readJSON(JsonDocument& doc) {
     if (!file) return false;
     DeserializationError error = deserializeJson(doc, file);
     file.close();
-    return !error;
+    if (error) {
+        doc.clear(); // Arquivo corrompido: não deixa dados parciais no documento
+        return false;
+    }
+    return true;
 }
 
 void SDData::updateJSON(const char* chave, const char* novoValor) {
     JsonDocument doc;
     readJSON(doc);
-    doc[chave] = novoValor;
+    // No ArduinoJson 7, const char* é guardado por ponteiro; String força a cópia da chave e do valor
+    doc[String(chave)] = String(novoValor);
     createJSON(doc);
 }
 
@@ -98,9 +103,10 @@ bool SDData::saveWakeonSettings(const String& name, const String& wakeon, const 
 bool SDData::loadWakeonSettings(String& outName, String& outWakeon, String& outSleep) {
     JsonDocument doc;
     if (!readJSON(doc)) return false;
-    outName = doc["wakeonMode"]["name"].as<String>();
-    outWakeon = doc["wakeonMode"]["wake"].as<String>();
-    outSleep = doc["wakeonMode"]["sleep"].as<String>();
+    // as<String>() devolve "null" quando a chave não existe; "| \"\"" devolve texto vazio
+    outName = String(doc["wakeonMode"]["name"] | "");
+    outWakeon = String(doc["wakeonMode"]["wake"] | "");
+    outSleep = String(doc["wakeonMode"]["sleep"] | "");
     return true;
 }
 

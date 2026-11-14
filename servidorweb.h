@@ -9,6 +9,7 @@
 #include <mutex>
 #include "SecurityConfig.h"
 #include "SDData.h"
+#include "WSManenger.h"
 #include "ui_dashboard.h"
 #include "index_html.h"
 #include "config_html.h"
@@ -21,7 +22,8 @@
 inline PhysicalAccessControl physicalAccessControl;
 
 inline AsyncWebServer server(80);
-inline AsyncWebSocket ws("/ws");
+// WSManenger é usado no lugar do AsyncWebSocket ws("/ws") diretamente
+// inline AsyncWebSocket ws("/ws");
 
 inline volatile bool g_webserver_state = true;
 
@@ -198,8 +200,8 @@ inline void update_display_and_ws() {
         if (refresh_display) copy_display_fields(snapshot, g_telemetry);
     }
 
-    if (refresh_ws && ws.count() > 0) {
-        if (ws.availableForWriteAll()) ws.textAll(build_json_string());
+    if (refresh_ws && wsManager.serverClientCount() > 0) {
+        if (wsManager.serverCanSendAll()) wsManager.broadcastText(build_json_string());
         else g_ws_dirty = true; // Fila cheia: tenta de novo no próximo ciclo
     }
 
@@ -245,23 +247,6 @@ inline bool parse_and_reply(AsyncWebServerRequest *request, size_t total) {
         default:
             request->send(400, "application/json", "{\"status\":\"error\",\"message\":\"JSON Invalido\"}");
             return false;
-    }
-}
-
-inline void on_ws_event(AsyncWebSocket *server_ptr, AsyncWebSocketClient *client,
-                        AwsEventType type, void *arg, uint8_t *data, size_t len) {
-    if (!g_webserver_state) return;
-
-    if (type == WS_EVT_CONNECT) {
-        client->text(build_json_string());
-    } else if (type == WS_EVT_DATA) {
-        // Com token configurado, a escrita só é aceita via HTTP autenticado
-        if (strlen(API_TOKEN) != 0) return;
-
-        AwsFrameInfo *info = (AwsFrameInfo*)arg;
-        if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT && len <= MAX_BODY_BYTES) {
-            parse_telemetry_json(data, len);
-        }
     }
 }
 
@@ -313,7 +298,7 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
         if (g_webserver_state != newState) {
             g_webserver_state = newState;
             if (!g_webserver_state) {
-                ws.closeAll();
+                wsManager.closeAllServerClients();
             }
         }
     }
@@ -343,8 +328,15 @@ inline void setup_web_server() {
         DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     }
 
-    ws.onEvent(on_ws_event);
-    server.addHandler(&ws);
+    wsManager.attachServer(server);
+    wsManager.onServerConnect([](AsyncWebSocketClient* client) {
+        client->text(build_json_string());
+    });
+    wsManager.onServerText([](AsyncWebSocketClient* client, uint8_t* data, size_t len) {
+        // Com token configurado, a escrita só é aceita via HTTP autenticado
+        if (strlen(API_TOKEN) != 0) return;
+        parse_telemetry_json(data, len);
+    });
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Dashboard Server Online");
@@ -395,7 +387,7 @@ inline void setup_web_server() {
 }
 
 inline void process_web_server_tasks() {
-    ws.cleanupClients();
+    wsManager.serverCleanup();
 
     // Persiste na task principal as alterações de /api/config (a escrita na NVS não roda na task do AsyncTCP)
     if (g_config_dirty) {
