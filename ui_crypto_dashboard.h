@@ -16,7 +16,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <WebSocketsClient.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <time.h>
@@ -24,7 +23,8 @@
 #include "UITheme.h"
 #include "ui_header.h"
 #include "SDData.h"
-#include "WSManenger.h"
+#include "WSManager.h"   // WebSocket (cliente Binance) centralizado em wsManager
+#include "Logger.h"
 
 // ===================== Configuração (pode ser sobrescrita no .ino antes do #include) =====================
 #ifndef LCD_W
@@ -45,8 +45,14 @@
 #ifndef CRYPTO_AUTOSCROLL_MS
 #define CRYPTO_AUTOSCROLL_MS 60000      // cada página fica 1 minuto (0 desliga a troca automática)
 #endif
+#ifndef CRYPTO_START_DELAY_MS
+#define CRYPTO_START_DELAY_MS 15000     // espera após o Wi-Fi conectar antes de abrir o TLS da Binance (deixa o servidor web subir e atender o 1º acesso)
+#endif
+#ifndef CRYPTO_MIN_HEAP_TLS
+#define CRYPTO_MIN_HEAP_TLS  40000      // maior bloco de heap livre exigido para abrir uma conexão TLS (0 desliga a checagem)
+#endif
 #ifndef CD_BORDER_OPA
-#define CD_BORDER_OPA        LV_OPA_60  // opacidade da borda dos cards (LV_OPA_30 = mais suave, LV_OPA_COVER = cheia)
+#define CD_BORDER_OPA        LV_OPA_30  // opacidade da borda dos cards (LV_OPA_30 = mais suave, LV_OPA_COVER = cheia)
 #endif
 
 // ===================== Fontes (usa a maior ativa no lv_conf.h) =====================
@@ -159,8 +165,10 @@ private:
   JsonDocument filterDoc;
   String wsPath;
   String geckoUrl;
-  bool binance_down = false;
   uint32_t last_poll = 0;
+  bool wifi_seen = false;            // Wi-Fi já foi visto conectado nesta sessão
+  uint32_t wifi_up_ms = 0;           // instante em que o Wi-Fi ficou conectado
+  uint32_t next_tls_try_ms = 0;      // não abre TLS antes deste instante (heap insuficiente)
   int cur_tf = CRYPTO_DEFAULT_TF;    // timeframe selecionado
   int pending_tf = -1;               // troca pedida pelo toque, aplicada no loop()
 
@@ -236,7 +244,7 @@ private:
     }
     // Wi-Fi: branco = Binance ao vivo, amarelo = fallback CoinGecko, vermelho = sem Wi-Fi
     bool wifi = WiFi.status() == WL_CONNECTED;
-    lv_color_t col = !wifi ? CryptoTheme::DOWN : (binance_down ? CryptoTheme::WARN : UITheme::TEXT_WHITE);
+    lv_color_t col = !wifi ? CryptoTheme::DOWN : (wsManager.isClientDown() ? CryptoTheme::WARN : UITheme::TEXT_WHITE);
     if (header) header->setWifiColor(col);
   }
 
@@ -328,8 +336,7 @@ private:
     pending_tf = -1;
     Serial.printf("[crypto] timeframe -> %s\n", TF_NAMES[cur_tf]);
     lv_timer_handler();                         // mostra o botão selecionado antes de bloquear na rede
-    if (wsManager.isClientStarted()) wsManager.disconnectClient();
-    binance_down = false;
+    wsManager.disconnectClient();               // também zera o estado "Binance fora"
     for (int i = 0; i < NUM_COINS; i++) {
       ui[i].n = 0;
       lv_obj_invalidate(ui[i].chart);
@@ -363,7 +370,7 @@ private:
         }
       }
     } else {
-      Serial.printf("[crypto] CoinGecko HTTP %d\n", code);
+      Logger::instance().logf("[crypto] CoinGecko HTTP %d\n", code);
     }
     http.end();
   }
@@ -525,22 +532,31 @@ private:
     }
   }
 
+  // Conexão, queda, reconexão com recuo e heartbeat ficam no WSManager; aqui só chegam as mensagens.
   static void ws_event(WStype_t type, uint8_t* payload, size_t length) {
-    CryptoDashboardUI& self = CryptoDashboardUI::instance();
-    if (type == WStype_CONNECTED) {
-      Serial.println("[crypto] WebSocket conectado");
-    } else if (type == WStype_DISCONNECTED || type == WStype_ERROR) {
-      if (!self.binance_down && wsManager.isClientStarted()) Serial.println("[crypto] WebSocket indisponivel, usando CoinGecko");
-      if (wsManager.isClientStarted()) self.binance_down = true;
-    } else if (type == WStype_TEXT) {
-      self.binance_down = false;
-      self.handle_msg(payload, length);
-    }
+    if (type == WStype_TEXT) CryptoDashboardUI::instance().handle_msg(payload, length);
   }
 
   void start_ws() {
-    wsManager.beginClientSSL("stream.binance.com", 9443, wsPath.c_str());
     wsManager.onClientEvent(ws_event);
+    wsManager.beginClientSSL("stream.binance.com", 9443, wsPath.c_str(), 5000, 15000, 3000, 2);
+  }
+
+  // Cada conexão TLS exige um bloco contíguo de ~40 KB. Abri-la com o heap fragmentado
+  // pode falhar e, pior, deixar o servidor web sem memória para servir a página.
+  bool heap_allows_tls(const char* what) {
+#if CRYPTO_MIN_HEAP_TLS > 0
+    uint32_t now = millis();
+    if ((int32_t)(now - next_tls_try_ms) < 0) return false;
+    uint32_t block = ESP.getMaxAllocHeap();
+    if (block < CRYPTO_MIN_HEAP_TLS) {
+      Logger::instance().logf("[crypto] heap insuficiente para TLS (%u < %u bytes), adiando %s\n",
+                    (unsigned)block, (unsigned)CRYPTO_MIN_HEAP_TLS, what);
+      next_tls_try_ms = now + 5000;
+      return false;
+    }
+#endif
+    return true;
   }
 
   // ---------- Construção da UI ----------
@@ -737,13 +753,26 @@ public:
   void loop() {
     if (pending_tf >= 0) apply_timeframe();
 
-    if (!wsManager.isClientStarted() && WiFi.status() == WL_CONNECTED) {
+    const bool wifi_ok = (WiFi.status() == WL_CONNECTED);
+    if (!wifi_ok) {
+      wifi_seen = false;
+    } else if (!wifi_seen) {
+      wifi_seen = true;
+      wifi_up_ms = millis();
+    }
+
+    // O TLS da Binance só abre depois de uma folga pós-Wi-Fi e com heap suficiente,
+    // para não competir com o servidor web justamente no primeiro acesso à página.
+    if (!wsManager.isClientStarted() && wifi_ok &&
+        (millis() - wifi_up_ms) >= CRYPTO_START_DELAY_MS &&
+        heap_allows_tls("historico e WebSocket")) {
       bootstrap_klines();
       start_ws();
     }
     wsManager.clientLoop();
 
-    if (wsManager.isClientStarted() && binance_down && (millis() - last_poll > CRYPTO_POLL_MS)) {
+    if (wsManager.isClientStarted() && wsManager.isClientDown() &&
+        (millis() - last_poll > CRYPTO_POLL_MS) && heap_allows_tls("CoinGecko")) {
       poll_coingecko();
       last_poll = millis();
     }

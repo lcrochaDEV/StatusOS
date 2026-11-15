@@ -8,7 +8,7 @@
 #include <WebSocketsClient.h>
 
 /*
- * WSManenger - ponto único para todas as chamadas WebSocket do StatusOS.
+ * WSManager - ponto único para todas as chamadas WebSocket do StatusOS.
  *
  *  Servidor (AsyncWebSocket, rota "/ws"):  telemetria enviada ao dashboard web
  *      attachServer() / broadcastText() / closeAllServerClients() / serverCleanup()
@@ -19,13 +19,13 @@
  * Os dados de cada lado (JSON de telemetria, parser da Binance) continuam fora da classe:
  * ela só cuida da conexão, da reconexão/heartbeat e do estado.
  */
-class WSManenger {
+class WSManager {
   public:
     using ServerConnectCb = std::function<void(AsyncWebSocketClient* client)>;
     using ServerTextCb    = std::function<void(AsyncWebSocketClient* client, uint8_t* data, size_t len)>;
     using ClientEventCb   = std::function<void(WStype_t type, uint8_t* payload, size_t length)>;
 
-    explicit WSManenger(const char* serverPath = "/ws");
+    explicit WSManager(const char* serverPath = "/ws");
 
     // ---------------------------------------------------------------- Servidor
     // Registra o handler "/ws" no servidor HTTP (idempotente).
@@ -92,9 +92,13 @@ class WSManenger {
     ServerConnectCb _onServerConnect;
     ServerTextCb    _onServerText;
 
+    static constexpr uint32_t CLIENT_RECONNECT_MAX_MS = 60000;
+
     WebSocketsClient _client;
     bool _clientStarted = false;
     bool _clientDown    = false;
+    uint8_t  _clientFailures  = 0;
+    uint32_t _reconnectBaseMs = 5000;
     ClientEventCb _onClientEvent;
 
     void handleServerEvent(AsyncWebSocketClient* client, AwsEventType type,
@@ -103,6 +107,6 @@ class WSManenger {
 };
 
 // Instância única usada por servidorweb.h, StatusOS.ino e ui_crypto_dashboard.h
-extern WSManenger wsManager;
+extern WSManager wsManager;
 
 #endif // WSMANENGER_H

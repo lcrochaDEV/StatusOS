@@ -1,16 +1,15 @@
 #include <Arduino.h>
+#include <TFT_eSPI.h>
 #include "Display.h"
+#include "Animations.h"
 #include "ui_dashboard.h"
 #include "ui_wol_dashboard.h"
 #include "ui_crypto_dashboard.h"
 #include "ui_screens.h"
-
-// Inclusão dos módulos de rede e servidor do projeto
 #include "WifiConnect.h"
-#include "WSManenger.h"
+#include "WSManager.h"
 #include "servidorweb.h"
 #include "Hours_Time.h"
-
 #include "Console.h"
 Console console = Console("Mochi> ");
 
@@ -35,9 +34,6 @@ static void gesture_event_cb(lv_event_t * e) {
 
 // Passa a referência da animação para o relógio
 Hours_Time hours_Time_exec = Hours_Time(hours_sleep, hours_wakeon, "", -3 * 3600, 0, "pool.ntp.org");
-
-#include <TFT_eSPI.h>
-#include "Animations.h"
 
 // 1. Instância ÚNICA do driver do hardware no .ino
 TFT_eSPI tft = TFT_eSPI();

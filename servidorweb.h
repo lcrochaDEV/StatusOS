@@ -9,21 +9,32 @@
 #include <mutex>
 #include "SecurityConfig.h"
 #include "SDData.h"
-#include "WSManenger.h"
 #include "ui_dashboard.h"
 #include "index_html.h"
 #include "config_html.h"
 #include "TelemetryData.h"
 #include "TelemetryParser.h"
 #include "Hours_Time.h"
-#include "SDData.h"
+#include "Logger.h"
 
 #include "PhysicalAccessControl.h"
+#include "WSManager.h"
 inline PhysicalAccessControl physicalAccessControl;
 
 inline AsyncWebServer server(80);
-// WSManenger é usado no lugar do AsyncWebSocket ws("/ws") diretamente
-// inline AsyncWebSocket ws("/ws");
+
+// Compatibilidade: o StatusOS.ino ainda chama ws.closeAll(). Ao migrar o .ino,
+// troque por wsManager.closeAllServerClients() e remova este atalho.
+struct WsCompat {
+    void closeAll() { wsManager.closeAllServerClients(); }
+};
+inline WsCompat ws;
+
+// Intervalo do log de memória no Serial (0 desliga). Ajuda a medir a disputa de heap
+// entre o servidor web e o TLS da Binance: compare "maior_bloco" com e sem a tela de cripto.
+#ifndef STATUSOS_HEAP_LOG_MS
+#define STATUSOS_HEAP_LOG_MS 30000
+#endif
 
 inline volatile bool g_webserver_state = true;
 
@@ -49,6 +60,7 @@ inline void load_config_from_nvs() {
     }
 
     g_webserver_state = preferences.getBool("webserver", g_webserver_state);
+    wsManager.setServerEnabled(g_webserver_state);
     wake = preferences.getString("wake", wake);
     sleep = preferences.getString("sleep", sleep);
     preferences.end();
@@ -185,6 +197,63 @@ inline void handleDateTime(AsyncWebServerRequest *request) {
     request->send(200, "application/json", responseJson);
 }
 
+// Envia uma página HTML guardada na flash em blocos (AsyncProgmemResponse), sem copiá-la para o heap.
+// send(code, tipo, const char*) monta um String com a página inteira (~30 KB contíguos), o que falha
+// com o heap fragmentado pelo TLS da Binance. O ETag (muda a cada compilação) deixa o navegador
+// reaproveitar a página em cache: a recarga vira uma resposta 304 de poucos bytes.
+inline void send_flash_page(AsyncWebServerRequest *request, const char *html, size_t len, const char *etag) {
+    if (request->hasHeader("If-None-Match") && request->header("If-None-Match").equals(etag)) {
+        AsyncWebServerResponse *notModified = request->beginResponse(304);
+        notModified->addHeader("ETag", etag);
+        request->send(notModified);
+        return;
+    }
+
+    AsyncWebServerResponse *response = request->beginResponse(200, "text/html", (const uint8_t *)html, len);
+    response->addHeader("ETag", etag);
+    response->addHeader("Cache-Control", "no-cache"); // sempre revalida com o ETag
+    request->send(response);
+}
+
+// Estado do sistema para diagnóstico (GET /api/health)
+inline void handle_health(AsyncWebServerRequest *request) {
+    if (!is_authorized(request)) {
+        request->send(401, "application/json", "{\"status\":\"error\",\"message\":\"Nao autorizado\"}");
+        return;
+    }
+
+    JsonDocument doc;
+    doc["heap_livre"]        = ESP.getFreeHeap();
+    doc["heap_maior_bloco"]  = ESP.getMaxAllocHeap();
+    doc["heap_minimo"]       = ESP.getMinFreeHeap();
+    doc["uptime_s"]          = millis() / 1000;
+    doc["ws_clientes"]       = wsManager.serverClientCount();
+    doc["binance_iniciado"]  = wsManager.isClientStarted();
+    doc["binance_conectado"] = wsManager.isClientConnected();
+    doc["binance_caiu"]      = wsManager.isClientDown();
+    doc["wifi_rssi"]         = WiFi.RSSI();
+
+    String body;
+    serializeJson(doc, body);
+    request->send(200, "application/json", body);
+}
+
+// Log periódico de memória no Serial (STATUSOS_HEAP_LOG_MS)
+inline void log_heap_stats(uint32_t now) {
+#if STATUSOS_HEAP_LOG_MS > 0
+    if (!Logger::instance().isEnabled()) return;
+    static uint32_t last_log_ms = 0;
+    if (now - last_log_ms < STATUSOS_HEAP_LOG_MS) return;
+    last_log_ms = now;
+    Logger::instance().logf("[heap] livre=%uKB maior_bloco=%uKB minimo=%uKB ws_clientes=%u binance=%s\n",
+                  (unsigned)(ESP.getFreeHeap() / 1024),
+                  (unsigned)(ESP.getMaxAllocHeap() / 1024),
+                  (unsigned)(ESP.getMinFreeHeap() / 1024),
+                  (unsigned)wsManager.serverClientCount(),
+                  wsManager.isClientConnected() ? "ok" : (wsManager.isClientDown() ? "fora" : "iniciando"));
+#endif
+}
+
 // Atualiza o display (LVGL, somente na task principal) e os clientes WebSocket
 inline void update_display_and_ws() {
     static TelemetryData snapshot;
@@ -250,6 +319,25 @@ inline bool parse_and_reply(AsyncWebServerRequest *request, size_t total) {
     }
 }
 
+// Registra o WebSocket "/ws" no servidor HTTP, via WSManager
+inline void setup_ws_handlers() {
+    // Novo navegador conectado: recebe o JSON atual de imediato
+    wsManager.onServerConnect([](AsyncWebSocketClient *client) {
+        client->text(build_json_string());
+    });
+
+    // Mensagens recebidas: telemetria enviada por coletores. Com token configurado,
+    // a escrita só é aceita via HTTP autenticado.
+    wsManager.onServerText([](AsyncWebSocketClient *, uint8_t *data, size_t len) {
+        parse_telemetry_json(data, len);
+    });
+    wsManager.setServerAcceptIncoming(strlen(API_TOKEN) == 0);
+    wsManager.setServerMaxIncomingBytes(MAX_BODY_BYTES);
+    wsManager.setServerEnabled(g_webserver_state);
+
+    wsManager.attachServer(server);
+}
+
 inline void handle_post_telemetry(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
     if (!g_webserver_state) {
         if (index == 0) {
@@ -297,9 +385,7 @@ inline void handle_post_config(AsyncWebServerRequest *request, uint8_t *data, si
         bool newState = doc["webserver"].as<bool>();
         if (g_webserver_state != newState) {
             g_webserver_state = newState;
-            if (!g_webserver_state) {
-                wsManager.closeAllServerClients();
-            }
+            wsManager.setServerEnabled(g_webserver_state); // desligar derruba os clientes conectados
         }
     }
 
@@ -328,15 +414,7 @@ inline void setup_web_server() {
         DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     }
 
-    wsManager.attachServer(server);
-    wsManager.onServerConnect([](AsyncWebSocketClient* client) {
-        client->text(build_json_string());
-    });
-    wsManager.onServerText([](AsyncWebSocketClient* client, uint8_t* data, size_t len) {
-        // Com token configurado, a escrita só é aceita via HTTP autenticado
-        if (strlen(API_TOKEN) != 0) return;
-        parse_telemetry_json(data, len);
-    });
+    setup_ws_handlers();
 
     server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Dashboard Server Online");
@@ -353,9 +431,13 @@ inline void setup_web_server() {
             );
             return;
         }
-        request->send(200, "text/html", index_html); // Transmite direto da flash, sem copiar para o heap
+        // O ETag muda a cada compilação (a página só muda com um novo firmware)
+        static const char *index_etag = "\"" __DATE__ " " __TIME__ "\"";
+        send_flash_page(request, index_html, sizeof(index_html) - 1, index_etag);
     });
-    
+
+    server.on("/api/health", HTTP_GET, handle_health);
+
     server.on("/datetime", HTTP_GET, handleDateTime);
 
     server.on("/config", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -388,6 +470,7 @@ inline void setup_web_server() {
 
 inline void process_web_server_tasks() {
     wsManager.serverCleanup();
+    log_heap_stats(millis());
 
     // Persiste na task principal as alterações de /api/config (a escrita na NVS não roda na task do AsyncTCP)
     if (g_config_dirty) {

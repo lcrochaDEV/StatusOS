@@ -1,7 +1,7 @@
 #include "Console.h"
 #include "ui_screens.h"
 #include <lvgl.h>
-
+#include "Logger.h"
 
 // Utiliza variável estática para rastrear se é o primeiro log após o prompt
 static bool firstLogAfterPrompt = true;
@@ -21,8 +21,6 @@ static bool isDigitsOnly(const String& text) {
 Console::Console(const char* consoleText)
   :
     _consoleText(consoleText != nullptr ? consoleText : "Mochi> "),
-    _logsEnabled(false),
-    // Implementações padrão (podem ser trocadas pelos setters); assim o .ino não precisa ligá-las
     _brightness(&g_file_system_ctrl),
     _popup(&g_popup_control)
 {}
@@ -42,64 +40,11 @@ void Console::printPrompt() {
   firstLogAfterPrompt = true; // O próximo log deve pular a linha do prompt
 }
 
-// Habilita ou desabilita os logs sem disparar printPrompt extra
-void Console::setLogState(bool enable) {
-  _logsEnabled = enable;
-  String status = _logsEnabled ? "[SYSTEM] Logs Habilitados." : "[SYSTEM] Logs Deshabilitados.";
-  menssageViewMsg(status.c_str());
-  // Removido o printPrompt() daqui para evitar duplicar Mochi>
-}
-
-bool Console::isLogEnabled() const {
-  return _logsEnabled;
-}
-
-// Método central para canalizar logs de todas as classes
-void Console::log(const char* message) {
-  if (!_logsEnabled || message == nullptr) return;
-
-  if (firstLogAfterPrompt) {
-    // Na primeira execução após habilitar o log/prompt, pula a linha para sair de baixo do "Mochi> "
-    Serial.print("\n[LOG] ");
-    Serial.print(message);
-    firstLogAfterPrompt = false; // Desativa a quebra extra para os logs subsequentes
-  } else {
-    // Logs normais em sequência: colados linha a linha sem quebras extras
-    Serial.print("[LOG] ");
-    Serial.print(message);
-  }
-}
-
 void Console::logf(const char* format, ...) {
-  if (!_logsEnabled || format == nullptr) return;
-
-  char buffer[128];
-  va_list args;
-  va_start(args, format);
-  va_list argsCopy;
-  va_copy(argsCopy, args);
-  int needed = vsnprintf(buffer, sizeof(buffer), format, args);
-  va_end(args);
-
-  if (needed >= (int)sizeof(buffer)) {
-    // Mensagem maior que o buffer local: formata em heap temporária para não truncar
-    char* bigBuffer = (char*)malloc((size_t)needed + 1);
-    if (bigBuffer != nullptr) {
-      vsnprintf(bigBuffer, (size_t)needed + 1, format, argsCopy);
-      va_end(argsCopy);
-      this->log((const char*)bigBuffer);
-      free(bigBuffer);
-      return;
-    }
-  }
-  va_end(argsCopy);
-
-  if (needed < 0) return;
-  this->log((const char*)buffer);
-}
-
-void Console::log(const String& message) {
-  this->log(message.c_str());
+    va_list args;
+    va_start(args, format);
+    Logger::instance().vlogf(format, args);
+    va_end(args);
 }
 
 void Console::consoleView() {
@@ -392,14 +337,9 @@ void Console::cmdPs1(const String& param) {
     _anim->stop();
   } else {
     menssageViewMsg("[Console] Executando animação PS1...");
-    //_anim->ps1(); // Executa o teste na classe Animations
-    //_anim->playAnimation(GifID::PS1);
   }
 }
 
-
-
-// DISPLAYON/DISPLAYOFF passam pelo Hours_Time (quando existe) para respeitar o período noturno
 void Console::cmdDisplayOn(const String& param) {
   (void)param;
   Hours_Time* horario = Hours_Time::instance();
@@ -431,7 +371,6 @@ void Console::cmdDisplayOff(const String& param) {
 }
 
 void Console::cmdWake(const String& param) {
-    // Handle the WAKE command here
 }
 
 void Console::cmdClear(const String& param) {
@@ -456,4 +395,3 @@ void Console::cmdScreenCrypto(const String& param) {
     lv_scr_load_anim(g_screen_crypto, LV_SCR_LOAD_ANIM_MOVE_LEFT, 300, 0, false);
     menssageViewMsg("[Console] Alternando para tela Crypto.");
 }
-
